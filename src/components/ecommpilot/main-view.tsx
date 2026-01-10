@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
@@ -87,7 +88,7 @@ export default function MainView() {
         acc.stock += (item.stock_kol || 0) + (item.stock_pith || 0) + (item.stock_har || 0) + (item.stock_blr || 0);
         return acc;
       },
-      { revenue: 0, spend: 0, roas: 0, cvr: 0, returns: 0, stock: 0, skus: 0 }
+      { revenue: 0, spend: 0, roas: 0, cvr: 0, returns: 0, stock: 0, skus: displayData.length }
     );
   }, [displayData]);
   
@@ -132,7 +133,7 @@ export default function MainView() {
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
-        const data = new Uint8Array(e.target.result as ArrayBuffer);
+        const data = new Uint8Array(e.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: "array" });
         const worksheet = workbook.Sheets[workbook.SheetNames[0]];
         
@@ -317,3 +318,5 @@ export default function MainView() {
     </>
   );
 }
+
+    
