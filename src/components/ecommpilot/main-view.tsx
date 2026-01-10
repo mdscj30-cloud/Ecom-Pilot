@@ -164,8 +164,8 @@ export default function MainView() {
             }));
             setDisplayData(processed as InventoryItem[]);
         } else if (type === 'growth' || type === 'daily') {
-            const json = XLSX.utils.sheet_to_json<any>(worksheet, { header: 1, defval: "" });
-
+             const json = XLSX.utils.sheet_to_json<any>(worksheet, { header: 1, defval: "" });
+            
             if (json.length < 2) throw new Error("Sheet must have at least 2 header rows.");
 
             const platformHeaders = json[0] as string[];
@@ -174,21 +174,22 @@ export default function MainView() {
 
             const platformDetails: { name: string, startIndex: number, endIndex: number }[] = [];
             let currentPlatform: { name: string, startIndex: number } | null = null;
-
+            
+            // Find platform columns from the first row
             for (let i = 1; i < platformHeaders.length; i++) {
                 const header = platformHeaders[i]?.trim();
                 if (header) {
                     if (currentPlatform) {
                         platformDetails.push({ ...currentPlatform, endIndex: i - 1 });
                     }
-                    const platformName = header.replace(/^(\d+(\s*and\s*\d+)?\s*of\s+\d+:\s*)/i, '').trim();
+                     const platformName = header.replace(/^(\d+(\s*and\s*\d+)?\s*of\s+\d+:\s*)/i, '').trim();
                     currentPlatform = { name: platformName, startIndex: i };
                 }
             }
             if (currentPlatform) {
                 platformDetails.push({ ...currentPlatform, endIndex: platformHeaders.length - 1 });
             }
-
+            
             const processedData: ProcessedSheetData[] = [];
 
             dataRows.forEach(row => {
@@ -196,11 +197,13 @@ export default function MainView() {
                 if (!dateRaw) return;
 
                 let date: Date | null = null;
-                if (typeof dateRaw === 'number') {
+                // Check if it's an Excel date number
+                if (typeof dateRaw === 'number' && dateRaw > 1) {
                     const excelEpoch = new Date(Date.UTC(1899, 11, 30));
                     date = new Date(excelEpoch.getTime() + dateRaw * 86400000);
                 } else if (typeof dateRaw === 'string') {
-                    const formats = ["MMM'yy", "dd-MMM-yy", "dd-MMM", "yyyy-MM-dd", "MM/dd/yy", "M/d/yy", "MMMM", "MMM yyyy"];
+                    // Try parsing common string formats
+                    const formats = ["dd-MMM-yy", "dd-MMM", "yyyy-MM-dd", "MM/dd/yy", "M/d/yy", "MMM'yy", "MMMM", "MMM yyyy"];
                     for (const fmt of formats) {
                         const d = parse(dateRaw, fmt, new Date());
                         if (isValid(d)) {
@@ -208,12 +211,13 @@ export default function MainView() {
                             break;
                         }
                     }
-                    if (!date && /^\d{5}$/.test(dateRaw)) {
+                    // Fallback for 5-digit number strings (Excel date serial)
+                     if (!date && /^\d{5}$/.test(dateRaw)) {
                         const excelEpoch = new Date(Date.UTC(1899, 11, 30));
-                        date = new Date(excelEpoch.getTime() + parseInt(dateRaw, 10) * 86400000);
+                        date = new Date(excelEpoch.getTime() + (parseInt(dateRaw, 10) -1) * 86400000);
                     }
                 }
-
+                
                 if (!date || !isValid(date)) return;
 
                 platformDetails.forEach(platform => {
@@ -487,6 +491,3 @@ export default function MainView() {
     </>
   );
 }
-
-    
-    
