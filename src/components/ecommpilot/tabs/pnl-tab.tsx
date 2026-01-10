@@ -452,7 +452,7 @@ export default function PnlTab({ data, onFileUpload, onCloudImport }: PnlTabProp
                             const isOpen = openCollapsibles.includes(dateKey);
                             return (
                                 <Collapsible asChild key={dateKey} open={isOpen} onOpenChange={() => toggleCollapsible(dateKey)}>
-                                    <>
+                                    <tbody>
                                         <TableRow className="cursor-pointer">
                                             <TableCell>
                                                 <CollapsibleTrigger asChild>
@@ -500,7 +500,7 @@ export default function PnlTab({ data, onFileUpload, onCloudImport }: PnlTabProp
                                                 </td>
                                             </tr>
                                         </CollapsibleContent>
-                                    </>
+                                    </tbody>
                                 </Collapsible>
                             )
                         })}
@@ -511,3 +511,5 @@ export default function PnlTab({ data, onFileUpload, onCloudImport }: PnlTabProp
     </div>
   );
 }
+
+    
