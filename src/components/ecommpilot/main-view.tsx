@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
@@ -151,7 +152,7 @@ export default function MainView() {
             return {
               id: Date.now() + index,
               channel: item.channel || 'Amazon',
-              name: item.sku_name,
+              name: item.sku_name || item.name,
               type: 'B2C',
               price: parseFloat(item.price) || 0,
               shipping: parseFloat(item.shipping) || 0,
@@ -173,11 +174,14 @@ export default function MainView() {
               returns: parseInt(item.returns, 10) || 0,
               impr: parseInt(item.impr, 10) || 0,
               clicks: parseInt(item.clicks, 10) || 0,
-              ads_active: item.ads_active === 'TRUE' || item.ads_active === true,
+              ads_active: String(item.ads_active).toUpperCase() === 'TRUE',
               rating: parseFloat(item.rating) || 0,
               reviews: parseInt(item.reviews, 10) || 0
             };
           });
+          if (importedData.length === 0 || !importedData.some(d => d.name)) {
+             throw new Error("No valid inventory data was parsed. Check column headers like 'SKU Name', 'Price', 'Stock_KOL', etc.");
+          }
           setDisplayData(importedData);
       } else if (type === 'daily' || type === 'growth') {
             const header1: string[] = json[0] || [];
