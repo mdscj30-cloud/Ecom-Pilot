@@ -483,8 +483,6 @@ export default function MainView() {
                 ...newSku,
                 id: Date.now(),
                 type: 'B2C',
-                price: 0,
-                cost: 0,
                 shipping: 0, commission: 0,
                 stock_kol: 0, stock_pith: 0, stock_har: 0, stock_blr: 0,
                 stock_unalloc: 0, stock_factory: 0, stock_wip: 0,
@@ -499,5 +497,3 @@ export default function MainView() {
     </>
   );
 }
-
-    

@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState } from "react";
@@ -80,17 +81,29 @@ export function CloudImportModal({
 interface AddSkuModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (sku: { name: string; channel: "Meesho" | "Amazon" }) => void;
+  onSave: (sku: {
+    name: string;
+    channel: "Meesho" | "Amazon";
+    price: number;
+    cost: number;
+  }) => void;
 }
 
 export function AddSkuModal({ isOpen, onClose, onSave }: AddSkuModalProps) {
   const [name, setName] = useState("");
   const [channel, setChannel] = useState<"Meesho" | "Amazon">("Meesho");
+  const [price, setPrice] = useState("");
+  const [cost, setCost] = useState("");
 
   const handleSave = () => {
+    const priceNum = parseFloat(price) || 0;
+    const costNum = parseFloat(cost) || 0;
     if (name) {
-      onSave({ name, channel });
+      onSave({ name, channel, price: priceNum, cost: costNum });
       setName("");
+      setChannel("Meesho");
+      setPrice("");
+      setCost("");
       onClose();
     }
   };
@@ -99,7 +112,7 @@ export function AddSkuModal({ isOpen, onClose, onSave }: AddSkuModalProps) {
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Add SKU (Quick)</DialogTitle>
+          <DialogTitle>Add SKU</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-4">
           <div className="space-y-2">
@@ -111,21 +124,43 @@ export function AddSkuModal({ isOpen, onClose, onSave }: AddSkuModalProps) {
               placeholder="e.g., Baby Diapers NB (72 Pcs)"
             />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="new-channel">Channel</Label>
-            <Select
-              value={channel}
-              onValueChange={(v: "Meesho" | "Amazon") => setChannel(v)}
-            >
-              <SelectTrigger id="new-channel">
-                <SelectValue placeholder="Select a channel" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Meesho">Meesho</SelectItem>
-                <SelectItem value="Amazon">Amazon</SelectItem>
-              </SelectContent>
-            </Select>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="new-channel">Channel</Label>
+              <Select
+                value={channel}
+                onValueChange={(v: "Meesho" | "Amazon") => setChannel(v)}
+              >
+                <SelectTrigger id="new-channel">
+                  <SelectValue placeholder="Select a channel" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Meesho">Meesho</SelectItem>
+                  <SelectItem value="Amazon">Amazon</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+             <div className="space-y-2">
+                <Label htmlFor="new-price">Price (₹)</Label>
+                <Input
+                id="new-price"
+                type="number"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+                placeholder="e.g., 599"
+                />
+            </div>
           </div>
+           <div className="space-y-2">
+                <Label htmlFor="new-cost">Cost (₹)</Label>
+                <Input
+                id="new-cost"
+                type="number"
+                value={cost}
+                onChange={(e) => setCost(e.target.value)}
+                placeholder="e.g., 250"
+                />
+            </div>
         </div>
         <DialogFooter>
           <DialogClose asChild>
