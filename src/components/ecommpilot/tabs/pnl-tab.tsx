@@ -1,11 +1,10 @@
-
 "use client";
 
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend, Area, ComposedChart } from 'recharts';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { Button } from '@/components/ui/button';
-import { Calendar, Upload, Cloud } from "lucide-react";
+import { Calendar, Upload, Cloud, Download } from "lucide-react";
 import React, { useMemo } from 'react';
 import type { MatrixData } from '@/lib/types';
 import {
@@ -69,6 +68,12 @@ export default function PnlTab({ data, labels, onFileUpload, onCloudImport }: Pn
                 Daily P&L
             </div>
             <div className="flex items-center gap-2">
+                <Button size="sm" variant="outline" asChild>
+                  <a href="/pnl-template.csv" download>
+                    <Download className="w-4 h-4 mr-2" />
+                    Download Template
+                  </a>
+                </Button>
                 <Button size="sm" variant="outline" onClick={() => document.getElementById('daily-upload')?.click()}>
                     <Upload className="w-4 h-4 mr-2" />
                     Import from File
@@ -78,7 +83,7 @@ export default function PnlTab({ data, labels, onFileUpload, onCloudImport }: Pn
                     Import from Sheet
                 </Button>
             </div>
-            <input type="file" id="daily-upload" className="hidden" accept=".xlsx, .xls" onChange={onFileUpload}/>
+            <input type="file" id="daily-upload" className="hidden" accept=".xlsx, .xls, .csv" onChange={onFileUpload}/>
           </CardTitle>
           <CardDescription>
             Import your daily P&L data (e.g., from a spreadsheet) to see visualizations.
@@ -105,25 +110,35 @@ export default function PnlTab({ data, labels, onFileUpload, onCloudImport }: Pn
                         Daily breakdown of revenue, costs, and profit.
                     </CardDescription>
                 </div>
-                <TooltipProvider>
-                    <Tooltip>
-                        <TooltipContent>Import from file</TooltipContent>
-                        <TooltipTrigger asChild>
-                            <Button size="icon" variant="outline" className="h-9 w-9" onClick={() => document.getElementById('daily-upload')?.click()}>
-                                <Upload className="w-4 h-4" />
-                            </Button>
-                        </TooltipTrigger>
-                    </Tooltip>
-                    <Tooltip>
-                        <TooltipContent>Import from Google Sheet</TooltipContent>
-                        <TooltipTrigger asChild>
-                            <Button size="icon" variant="outline" className="h-9 w-9" onClick={onCloudImport}>
-                                <Cloud className="w-4 h-4" />
-                            </Button>
-                        </TooltipTrigger>
-                    </Tooltip>
-                </TooltipProvider>
-                <input type="file" id="daily-upload" className="hidden" accept=".xlsx, .xls" onChange={onFileUpload}/>
+                 <div className="flex items-center gap-2">
+                    <TooltipProvider>
+                         <Tooltip>
+                            <TooltipContent>Download Template</TooltipContent>
+                            <TooltipTrigger asChild>
+                                <Button size="icon" variant="outline" className="h-9 w-9" asChild>
+                                    <a href="/pnl-template.csv" download><Download className="w-4 h-4" /></a>
+                                </Button>
+                            </TooltipTrigger>
+                        </Tooltip>
+                        <Tooltip>
+                            <TooltipContent>Import from file</TooltipContent>
+                            <TooltipTrigger asChild>
+                                <Button size="icon" variant="outline" className="h-9 w-9" onClick={() => document.getElementById('daily-upload')?.click()}>
+                                    <Upload className="w-4 h-4" />
+                                </Button>
+                            </TooltipTrigger>
+                        </Tooltip>
+                        <Tooltip>
+                            <TooltipContent>Import from Google Sheet</TooltipContent>
+                            <TooltipTrigger asChild>
+                                <Button size="icon" variant="outline" className="h-9 w-9" onClick={onCloudImport}>
+                                    <Cloud className="w-4 h-4" />
+                                </Button>
+                            </TooltipTrigger>
+                        </Tooltip>
+                    </TooltipProvider>
+                    <input type="file" id="daily-upload" className="hidden" accept=".xlsx, .xls, .csv" onChange={onFileUpload}/>
+                </div>
             </div>
         </CardHeader>
         <CardContent>

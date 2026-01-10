@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from '@/components/ui/button';
-import { BarChart2, Upload, Cloud } from "lucide-react";
+import { BarChart2, Upload, Cloud, Download } from "lucide-react";
 import React, { useMemo, useState } from 'react';
 import type { MatrixData } from '@/lib/types';
 import {
@@ -64,6 +64,12 @@ export default function GrowthTab({ data, labels, onFileUpload, onCloudImport }:
               Growth Analysis
             </div>
             <div className='flex items-center gap-2'>
+                <Button size="sm" variant="outline" asChild>
+                  <a href="/growth-template.csv" download>
+                    <Download className="w-4 h-4 mr-2" />
+                    Download Template
+                  </a>
+                </Button>
                 <Button size="sm" variant="outline" onClick={() => document.getElementById('growth-upload')?.click()}>
                     <Upload className="w-4 h-4 mr-2" />
                     Import from File
@@ -73,7 +79,7 @@ export default function GrowthTab({ data, labels, onFileUpload, onCloudImport }:
                     Import from Sheet
                 </Button>
             </div>
-            <input type="file" id="growth-upload" className="hidden" accept=".xlsx, .xls" onChange={onFileUpload}/>
+            <input type="file" id="growth-upload" className="hidden" accept=".xlsx, .xls, .csv" onChange={onFileUpload}/>
           </CardTitle>
           <CardDescription>
             Import your growth data (e.g., from a spreadsheet) to see visualizations and analysis.
@@ -143,6 +149,14 @@ export default function GrowthTab({ data, labels, onFileUpload, onCloudImport }:
               </Select>
               <TooltipProvider>
                 <UiTooltip>
+                    <UiTooltipContent>Download Template</UiTooltipContent>
+                    <UiTooltipTrigger asChild>
+                        <Button size="icon" variant="outline" className='h-9 w-9' asChild>
+                            <a href="/growth-template.csv" download><Download className="w-4 h-4" /></a>
+                        </Button>
+                    </UiTooltipTrigger>
+                </UiTooltip>
+                <UiTooltip>
                   <UiTooltipContent>Import from file</UiTooltipContent>
                   <UiTooltipTrigger asChild>
                     <Button size="icon" variant="outline" className='h-9 w-9' onClick={() => document.getElementById('growth-upload')?.click()}>
@@ -159,7 +173,7 @@ export default function GrowthTab({ data, labels, onFileUpload, onCloudImport }:
                     </UiTooltipTrigger>
                 </UiTooltip>
               </TooltipProvider>
-              <input type="file" id="growth-upload" className="hidden" accept=".xlsx, .xls" onChange={onFileUpload}/>
+              <input type="file" id="growth-upload" className="hidden" accept=".xlsx, .xls, .csv" onChange={onFileUpload}/>
             </div>
           </div>
         </CardHeader>

@@ -161,7 +161,7 @@ export default function MainView() {
             }));
             setDisplayData(processed as InventoryItem[]);
         } else if (type === 'growth' || type === 'daily') {
-            const raw_data = XLSX.utils.sheet_to_json<any>(worksheet, { header: 1 });
+             const raw_data = XLSX.utils.sheet_to_json<any>(worksheet, { header: 1 });
             if (raw_data.length < 2) {
               throw new Error("Sheet must have at least 2 header rows.");
             }
@@ -175,49 +175,41 @@ export default function MainView() {
 
             const platformKeys = ['GMV', 'Units', 'Packets', 'Ads Spent', 'Avg ASP', 'TACOS'];
             
-            // Find platform columns
-            const platformStarts: { name: string; startIndex: number }[] = [];
+            let currentPlatform: string | null = null;
+            let platformName = '';
+            
             mainHeaders.forEach((header, index) => {
-              if (typeof header === 'string' && header.match(/^\d+ of \d+:/)) {
-                platformStarts.push({ name: header, startIndex: index });
-              }
-            });
+                if (header) {
+                    currentPlatform = header;
+                    platformName = typeof header === 'string' ? header : `Platform ${index}`;
+                    if (!matrixData[platformName]) {
+                        matrixData[platformName] = { name: platformName, gmv:[], units:[], packets:[], spend:[], asp:[], tacos:[], share:[] };
+                    }
+                }
 
-            // Process Total columns first
-            const totalStartIndex = mainHeaders.findIndex(h => typeof h === 'string' && h.includes('Total'));
-            if(totalStartIndex > -1) {
-                const totalPlatformName = mainHeaders[totalStartIndex] as string;
-                matrixData[totalPlatformName] = { name: totalPlatformName, gmv:[], units:[], packets:[], spend:[], asp:[], tacos:[], share:[] };
-                body.forEach(row => {
-                    if(!labels.includes(row[0])) labels.push(row[0]);
-                    platformKeys.forEach((key, i) => {
-                        const colIndex = totalStartIndex + 1 + i;
-                        const value = parseFloat(row[colIndex]) || 0;
-                        if(key === 'GMV') matrixData[totalPlatformName].gmv.push(value);
-                        if(key === 'Units') matrixData[totalPlatformName].units.push(value);
-                        if(key === 'Ads Spent') matrixData[totalPlatformName].spend.push(value);
-                        if(key === 'Avg ASP') matrixData[totalPlatformName].asp.push(value);
-                        if(key === 'TACOS') matrixData[totalPlatformName].tacos.push(value);
-                    });
-                });
-            }
+                if(currentPlatform) {
+                    const subHeader = subHeaders[index];
+                    const platformData = matrixData[platformName];
+                    
+                    if (index === 0) { // Labels column (Month/Date)
+                        body.forEach(row => {
+                            if(row[index] && !labels.includes(row[index])) {
+                                labels.push(row[index]);
+                            }
+                        });
+                    }
 
-            // Process each platform
-            platformStarts.forEach(platform => {
-              matrixData[platform.name] = { name: platform.name, gmv:[], units:[], packets:[], spend:[], asp:[], tacos:[], share:[] };
-              body.forEach(row => {
-                  platformKeys.forEach((key, i) => {
-                      const subHeaderIndex = subHeaders.findIndex((sh, si) => si >= platform.startIndex && sh === key);
-                      if (subHeaderIndex > -1) {
-                        const value = parseFloat(row[subHeaderIndex]) || 0;
-                        if(key === 'GMV') matrixData[platform.name].gmv.push(value);
-                        if(key === 'Units') matrixData[platform.name].units.push(value);
-                        if(key === 'Ads Spent') matrixData[platform.name].spend.push(value);
-                        if(key === 'Avg ASP') matrixData[platform.name].asp.push(value);
-                        if(key === 'TACOS') matrixData[platform.name].tacos.push(value);
-                      }
-                  });
-              });
+                    if (platformKeys.includes(subHeader)) {
+                        body.forEach((row, rowIndex) => {
+                             const value = parseFloat(String(row[index]).replace(/,/g, '')) || 0;
+                             if(subHeader === 'GMV') platformData.gmv[rowIndex] = (platformData.gmv[rowIndex] || 0) + value;
+                             if(subHeader === 'Units') platformData.units[rowIndex] = (platformData.units[rowIndex] || 0) + value;
+                             if(subHeader === 'Ads Spent') platformData.spend[rowIndex] = (platformData.spend[rowIndex] || 0) + value;
+                             if(subHeader === 'Avg ASP') platformData.asp[rowIndex] = (platformData.asp[rowIndex] || 0) + value;
+                             if(subHeader === 'TACOS') platformData.tacos[rowIndex] = (platformData.tacos[rowIndex] || 0) + value;
+                        });
+                    }
+                }
             });
 
             if (type === 'growth') {
@@ -235,7 +227,7 @@ export default function MainView() {
       toast({
         variant: "destructive",
         title: "Import Failed",
-        description: "Could not process the uploaded file.",
+        description: error instanceof Error ? error.message : "Could not process the uploaded file.",
       });
     }
   };
@@ -249,10 +241,22 @@ export default function MainView() {
 
     const reader = new FileReader();
     reader.onload = (e) => {
-      const data = e.target?.result as ArrayBuffer;
-      processSheetData(data, type);
+      const data = e.target?.result;
+      if (data instanceof ArrayBuffer) {
+        processSheetData(data, type);
+      } else if (typeof data === 'string' && file.type === 'text/csv') {
+          // For CSV, convert string to ArrayBuffer for XLSX library
+          const arr = new Uint8Array(data.length);
+          for(let i=0; i<data.length; i++) arr[i] = data.charCodeAt(i);
+          processSheetData(arr.buffer, type);
+      }
     };
-    reader.readAsArrayBuffer(file);
+    if (file.type === 'text/csv') {
+        reader.readAsText(file);
+    } else {
+        reader.readAsArrayBuffer(file);
+    }
+
     if(event.target) event.target.value = '';
   };
   
