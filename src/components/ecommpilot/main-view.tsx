@@ -18,14 +18,10 @@ import type {
   TabId,
   SortConfig,
   Channel,
-  ProcessedSheetData
+  ProcessedSheetData,
+  Recommendation
 } from "@/lib/types";
 import { masterData } from "@/lib/data";
-import { getAiRecommendations } from "@/lib/actions";
-import {
-  InventoryRecommendationsOutput,
-  InventoryRecommendationsInput,
-} from "@/ai/flows/generate-inventory-recommendations";
 import { format, parse, isValid } from 'date-fns';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -61,8 +57,7 @@ export default function MainView() {
   const [searchTerm, setSearchTerm] = useState("");
   const [sortConfig, setSortConfig] = useState<SortConfig>({ column: null, direction: "desc" });
   const [roasThreshold, setRoasThreshold] = useState(3.0);
-  const [recTargetRoas, setRecTargetRoas] = useState(3.0);
-
+  
   // UI State
   const [isClient, setIsClient] = useState(false);
   const [alerts, setAlerts] = useState<string[]>([]);
@@ -70,10 +65,7 @@ export default function MainView() {
   const [isAddSkuModalOpen, setAddSkuModalOpen] = useState(false);
   const [pendingCloudType, setPendingCloudType] = useState<TabId | null>(null);
 
-  // Data State
-  const [recommendations, setRecommendations] = useState<InventoryRecommendationsOutput>([]);
-  const [isRecsLoading, setRecsLoading] = useState(false);
-
+  
   // === DATA PROCESSING & CALCULATIONS ===
   const kpis = useMemo<Kpi>(() => {
     return (filteredData || []).reduce(
@@ -118,7 +110,6 @@ export default function MainView() {
     setDisplayData(processed);
     setGrowthData(null);
     setDailyData(null);
-    setRecommendations([]);
     toast({ title: "Data Reset", description: "Loaded initial dataset." });
   };
   
@@ -164,7 +155,7 @@ export default function MainView() {
             }));
             setDisplayData(processed as InventoryItem[]);
         } else if (type === 'growth' || type === 'daily') {
-             const json = XLSX.utils.sheet_to_json<any>(worksheet, { header: 1, defval: "" });
+            const json = XLSX.utils.sheet_to_json<any>(worksheet, { header: 1, defval: "" });
             
             if (json.length < 2) throw new Error("Sheet must have at least 2 header rows.");
 
@@ -175,14 +166,13 @@ export default function MainView() {
             const platformDetails: { name: string, startIndex: number, endIndex: number }[] = [];
             let currentPlatform: { name: string, startIndex: number } | null = null;
             
-            // Find platform columns from the first row
             for (let i = 1; i < platformHeaders.length; i++) {
                 const header = platformHeaders[i]?.trim();
                 if (header) {
                     if (currentPlatform) {
                         platformDetails.push({ ...currentPlatform, endIndex: i - 1 });
                     }
-                     const platformName = header.replace(/^(\d+(\s*and\s*\d+)?\s*of\s+\d+:\s*)/i, '').trim();
+                    const platformName = header.replace(/^(\d+(\s*and\s*\d+)?\s*of\s+\d+:\s*)/i, '').trim();
                     currentPlatform = { name: platformName, startIndex: i };
                 }
             }
@@ -197,12 +187,10 @@ export default function MainView() {
                 if (!dateRaw) return;
 
                 let date: Date | null = null;
-                // Check if it's an Excel date number
                 if (typeof dateRaw === 'number' && dateRaw > 1) {
                     const excelEpoch = new Date(Date.UTC(1899, 11, 30));
                     date = new Date(excelEpoch.getTime() + dateRaw * 86400000);
                 } else if (typeof dateRaw === 'string') {
-                    // Try parsing common string formats
                     const formats = ["dd-MMM-yy", "dd-MMM", "yyyy-MM-dd", "MM/dd/yy", "M/d/yy", "MMM'yy", "MMMM", "MMM yyyy"];
                     for (const fmt of formats) {
                         const d = parse(dateRaw, fmt, new Date());
@@ -211,7 +199,6 @@ export default function MainView() {
                             break;
                         }
                     }
-                    // Fallback for 5-digit number strings (Excel date serial)
                      if (!date && /^\d{5}$/.test(dateRaw)) {
                         const excelEpoch = new Date(Date.UTC(1899, 11, 30));
                         date = new Date(excelEpoch.getTime() + (parseInt(dateRaw, 10) -1) * 86400000);
@@ -350,36 +337,6 @@ export default function MainView() {
     setModalOpen(true);
   };
 
-  const handleRecalculate = useCallback(async () => {
-    setRecsLoading(true);
-    const input: InventoryRecommendationsInput = {
-        inventoryItems: displayData.map(item => {
-            const revenue = item.price * item.orders;
-            const roas = item.spend > 0 ? revenue / item.spend : 0;
-            return {
-                sku: item.name,
-                channel: item.channel,
-                stockLevel: (item.stock_kol || 0) + (item.stock_pith || 0) + (item.stock_har || 0) + (item.stock_blr || 0),
-                drr: item.drr,
-                price: item.price,
-                shipping: item.shipping,
-                commission: item.commission,
-                roas: roas,
-            };
-        }),
-        targetRoas: recTargetRoas,
-    };
-
-    const result = await getAiRecommendations(input);
-    if (result.success && result.data) {
-        setRecommendations(result.data);
-        toast({ title: "Recommendations Generated", description: "AI has provided new action items." });
-    } else {
-        toast({ variant: 'destructive', title: "AI Error", description: result.error });
-    }
-    setRecsLoading(false);
-  }, [displayData, recTargetRoas, toast]);
-
 
   if (!isClient) {
     return null; // Or a loading skeleton
@@ -455,12 +412,8 @@ export default function MainView() {
         </TabsContent>
         <TabsContent value="recommendations">
             <RecommendationsTab 
-                recommendations={recommendations}
                 inventoryData={displayData}
-                isLoading={isRecsLoading}
-                targetRoas={recTargetRoas}
-                setTargetRoas={setRecTargetRoas}
-                onRecalculate={handleRecalculate}
+                roasThreshold={roasThreshold}
             />
         </TabsContent>
       </Tabs>

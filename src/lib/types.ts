@@ -59,6 +59,15 @@ export interface ProcessedSheetData {
   adsPerUnit: number;
 }
 
+export interface Recommendation {
+  sku: string;
+  inventoryAction: string;
+  adAction: string;
+  remarks: string;
+  stockDays: number;
+  netValue: number;
+}
+
 export interface MatrixData {
   [key: string]: {
     name: string;
@@ -82,5 +91,3 @@ export type SortConfig = {
 };
 
 export type Channel = 'All' | 'Meesho' | 'Amazon';
-
-    
