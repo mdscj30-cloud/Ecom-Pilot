@@ -37,10 +37,7 @@ export default function InventoryTab({ data, searchTerm, onFileUpload, onCloudIm
   const [viewMode, setViewMode] = useState<ViewMode>("units");
 
   const inventoryData = useMemo(() => {
-    const seen = new Set<string>();
     return data.filter((item) => {
-      if (seen.has(item.name)) return false;
-      seen.add(item.name);
       return searchTerm ? item.name.toLowerCase().includes(searchTerm.toLowerCase()) : true;
     });
   }, [data, searchTerm]);
@@ -198,10 +195,10 @@ export default function InventoryTab({ data, searchTerm, onFileUpload, onCloudIm
                             return (
                                 <TableRow key={item.id}>
                                     <TableCell className="sticky-col bg-card border-r font-medium text-foreground">{item.name}</TableCell>
-                                    <TableCell className="text-center">{renderCell(item.stock_kol, item.drr_kol, item.price, viewMode)}</TableCell><TableCell className="text-center border-r loc-group-border text-muted-foreground">{item.drr_kol}</TableCell>
-                                    <TableCell className="text-center">{renderCell(item.stock_pith, item.drr_pith, item.price, viewMode)}</TableCell><TableCell className="text-center border-r loc-group-border text-muted-foreground">{item.drr_pith}</TableCell>
-                                    <TableCell className="text-center">{renderCell(item.stock_har, item.drr_har, item.price, viewMode)}</TableCell><TableCell className="text-center border-r loc-group-border text-muted-foreground">{item.drr_har}</TableCell>
-                                    <TableCell className="text-center">{renderCell(item.stock_blr, item.drr_blr, item.price, viewMode)}</TableCell><TableCell className="text-center border-r loc-group-border text-muted-foreground">{item.drr_blr}</TableCell>
+                                    <TableCell className="text-center">{renderCell(item.stock_kol || 0, item.drr_kol || 0, item.price, viewMode)}</TableCell><TableCell className="text-center border-r loc-group-border text-muted-foreground">{item.drr_kol || 0}</TableCell>
+                                    <TableCell className="text-center">{renderCell(item.stock_pith || 0, item.drr_pith || 0, item.price, viewMode)}</TableCell><TableCell className="text-center border-r loc-group-border text-muted-foreground">{item.drr_pith || 0}</TableCell>
+                                    <TableCell className="text-center">{renderCell(item.stock_har || 0, item.drr_har || 0, item.price, viewMode)}</TableCell><TableCell className="text-center border-r loc-group-border text-muted-foreground">{item.drr_har || 0}</TableCell>
+                                    <TableCell className="text-center">{renderCell(item.stock_blr || 0, item.drr_blr || 0, item.price, viewMode)}</TableCell><TableCell className="text-center border-r loc-group-border text-muted-foreground">{item.drr_blr || 0}</TableCell>
                                     <TableCell className="text-center font-bold text-foreground">{Math.round(globalCover)}d</TableCell>
                                     <TableCell className="text-center text-lg">{item.id % 2 === 0 ? <ArrowUp className="w-4 h-4 mx-auto text-green-500" /> : <ArrowDown className="w-4 h-4 mx-auto text-red-400" />}</TableCell>
                                     <TableCell className="text-center text-muted-foreground">{rop}</TableCell>
