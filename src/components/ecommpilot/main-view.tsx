@@ -26,7 +26,7 @@ import {
   InventoryRecommendationsOutput,
   InventoryRecommendationsInput,
 } from "@/ai/flows/generate-inventory-recommendations";
-import { format, parse } from 'date-fns';
+import { format, parse, isValid } from 'date-fns';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -162,53 +162,54 @@ export default function MainView() {
             }));
             setDisplayData(processed as InventoryItem[]);
         } else if (type === 'growth' || type === 'daily') {
-            const json = XLSX.utils.sheet_to_json<any>(worksheet, { header: 1 });
+            const json = XLSX.utils.sheet_to_json<any>(worksheet, { header: 1, defval: null });
             
-            if (json.length < 2) {
-                throw new Error("Sheet must have at least 2 header rows.");
-            }
+            if (json.length < 2) throw new Error("Sheet must have at least 2 header rows.");
 
             const platformHeaders = json[0];
             const metricHeaders = json[1];
             const dataRows = json.slice(2);
-            
-            const platformDetails: { name: string, startIndex: number }[] = [];
+
+            const platformDetails: { name: string, startIndex: number, endIndex: number }[] = [];
             platformHeaders.forEach((header, index) => {
-                if (header && typeof header === 'string' && header.includes(' of 8:')) {
-                    platformDetails.push({ name: header.split(': ')[1], startIndex: index });
+                if (header && typeof header === 'string' && header.match(/^\d+\s+of\s+\d+:/)) {
+                     platformDetails.push({ name: header.split(': ')[1], startIndex: index, endIndex: 0 });
                 }
+            });
+            
+            platformDetails.forEach((p, i) => {
+                const nextPlatform = platformDetails[i+1];
+                p.endIndex = nextPlatform ? nextPlatform.startIndex - 1 : platformHeaders.length -1;
             });
 
             const processedData: ProcessedSheetData[] = [];
-
             dataRows.forEach(row => {
                 const dateRaw = row[0];
                 if (!dateRaw) return;
 
-                // Handle Excel's numeric date format or string format
-                const date = (typeof dateRaw === 'number')
-                  ? XLSX.SSF.parse_date_code(dateRaw)
-                  : parse(dateRaw, "MMM'yy", new Date());
-
-                if (isNaN(date.getFullYear())) return; // Skip invalid dates
+                let date: Date;
+                if (typeof dateRaw === 'number') {
+                    const parsedDate = XLSX.SSF.parse_date_code(dateRaw);
+                    date = new Date(parsedDate.y, parsedDate.m - 1, parsedDate.d, parsedDate.H, parsedDate.M, parsedDate.S);
+                } else if (typeof dateRaw === 'string') {
+                     // Try parsing formats like "MMM'yy" or other common date strings
+                    date = parse(dateRaw, "MMM'yy", new Date());
+                    if (!isValid(date)) {
+                        date = new Date(dateRaw); // Fallback for ISO strings etc.
+                    }
+                } else {
+                    return; // Skip if date is not a number or string
+                }
                 
-                const validDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-
+                if (!isValid(date)) return;
 
                 platformDetails.forEach(platform => {
                     let gmv = 0, units = 0, packets = 0, adsSpent = 0;
 
-                    for (let i = platform.startIndex; i < (platformHeaders.length); i++) {
-                         // Stop if we hit the next platform's start index
-                        const nextPlatform = platformDetails.find(p => p.startIndex > platform.startIndex);
-                        if(nextPlatform && i >= nextPlatform.startIndex) break;
-                        
+                    for (let i = platform.startIndex; i <= platform.endIndex; i++) {
                         const metric = metricHeaders[i];
                         const value = row[i];
-
-                        const numValue = (typeof value === 'string')
-                            ? parseFloat(value.replace(/,/g, '')) || 0
-                            : (typeof value === 'number' ? value : 0);
+                        const numValue = (typeof value === 'string') ? parseFloat(value.replace(/,/g, '')) || 0 : (typeof value === 'number' ? value : 0);
 
                         switch (metric) {
                             case 'GMV': gmv = numValue; break;
@@ -218,12 +219,12 @@ export default function MainView() {
                         }
                     }
 
-                    if (gmv > 0 || units > 0 || adsSpent > 0) {
+                    if (gmv > 0 || units > 0 || adsSpent > 0 || packets > 0) {
                          const avgAsp = units > 0 ? gmv / units : 0;
                          const tacos = gmv > 0 ? adsSpent / gmv : 0;
-
+                         
                          processedData.push({
-                            date: validDate,
+                            date: date,
                             channel: platform.name,
                             gmv,
                             units,
@@ -231,9 +232,9 @@ export default function MainView() {
                             adsSpent,
                             avgAsp,
                             tacos,
-                            month: format(validDate, 'MMM'),
-                            year: format(validDate, 'yyyy'),
-                            day: format(validDate, 'd'),
+                            month: format(date, 'MMM'),
+                            year: format(date, 'yyyy'),
+                            day: format(date, 'd'),
                             revenuePerUnit: units > 0 ? gmv / units : 0,
                             adsPerUnit: units > 0 ? adsSpent / units : 0,
                         });
@@ -275,13 +276,6 @@ export default function MainView() {
       const data = e.target?.result;
       if (data instanceof ArrayBuffer) {
         processSheetData(data, type);
-      } else if (typeof data === 'string') {
-          const buffer = new ArrayBuffer(data.length);
-          const view = new Uint8Array(buffer);
-          for (let i = 0; i < data.length; i++) {
-              view[i] = data.charCodeAt(i);
-          }
-          processSheetData(buffer, type);
       }
     };
     reader.readAsArrayBuffer(file);
@@ -299,7 +293,8 @@ export default function MainView() {
     try {
         const response = await fetch(`/api/sheets?url=${encodeURIComponent(url)}`);
         if (!response.ok) {
-            throw new Error(`Failed to fetch: ${response.statusText}`);
+            const errorText = await response.text();
+            throw new Error(`Failed to fetch: ${response.statusText} - ${errorText}`);
         }
         const data = await response.arrayBuffer();
         
@@ -444,7 +439,10 @@ export default function MainView() {
       <CloudImportModal
         isOpen={isModalOpen}
         onClose={() => setModalOpen(false)}
-        onSync={(url) => handleCloudSync(url, pendingCloudType)}
+        onSync={(url) => {
+            handleCloudSync(url, pendingCloudType);
+            setModalOpen(false);
+        }}
         type={pendingCloudType}
       />
       

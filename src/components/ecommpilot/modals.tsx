@@ -57,6 +57,9 @@ export function CloudImportModal({
             onChange={(e) => setUrl(e.target.value)}
             placeholder="https://docs.google.com/.../pub?output=csv"
           />
+           <p className="text-xs text-muted-foreground">
+            Go to your sheet, click File &gt; Share &gt; Publish to web. Select "Comma-separated values (.csv)" and copy the link.
+          </p>
         </div>
         <DialogFooter>
           <DialogClose asChild>
@@ -137,3 +140,5 @@ export function AddSkuModal({ isOpen, onClose, onSave }: AddSkuModalProps) {
     </Dialog>
   );
 }
+
+    
