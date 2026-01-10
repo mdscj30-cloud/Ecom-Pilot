@@ -1,8 +1,8 @@
 
 "use client";
 
-import React from "react";
-import type { InventoryItem, Kpi, Channel } from "@/lib/types";
+import React, { useMemo } from "react";
+import type { InventoryItem, Kpi, Channel, SortConfig } from "@/lib/types";
 import KpiCard from "../kpi-card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,7 @@ import {
   Trash2,
   Cloud,
   Download,
+  ArrowUpDown,
 } from "lucide-react";
 import {
   Tooltip,
@@ -41,6 +42,8 @@ interface DailyOpsTabProps {
   onAddSku: () => void;
   onFileUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
   onCloudImport: () => void;
+  sortConfig: SortConfig;
+  setSortConfig: (config: SortConfig) => void;
 }
 
 const channels: Channel[] = ["All", "Meesho", "Amazon"];
@@ -56,7 +59,9 @@ export default function DailyOpsTab({
   setSearchTerm,
   onAddSku,
   onFileUpload,
-  onCloudImport
+  onCloudImport,
+  sortConfig,
+  setSortConfig,
 }: DailyOpsTabProps) {
     
   const getDecision = (item: InventoryItem) => {
@@ -69,6 +74,75 @@ export default function DailyOpsTab({
     if (roas > roasThreshold && stockDays > 10) return { text: "GREEN", variant: "default" as const, className: "bg-green-600/20 text-green-700" };
     return { text: "AMBER", variant: "secondary" as const, className: "bg-amber-500/20 text-amber-700" };
   };
+
+  const requestSort = (column: string) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig.column === column && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ column, direction });
+  };
+  
+  const getSortIcon = (column: string) => {
+    if (sortConfig.column !== column) {
+      return <ArrowUpDown className="ml-2 h-4 w-4 inline-block" />;
+    }
+    return sortConfig.direction === 'desc' ? '▼' : '▲';
+  };
+
+  const sortedData = useMemo(() => {
+    let sortableItems = [...data];
+    if (sortConfig.column !== null) {
+      sortableItems.sort((a, b) => {
+        const aValue = a[sortConfig.column as keyof InventoryItem];
+        const bValue = b[sortConfig.column as keyof InventoryItem];
+        
+        if(sortConfig.column === 'name' || sortConfig.column === 'channel') {
+            return (aValue as string).localeCompare(bValue as string) * (sortConfig.direction === 'asc' ? 1 : -1);
+        }
+        
+        // Custom logic for derived columns
+        if (sortConfig.column === 'net') {
+            const netA = a.price - a.shipping - a.commission;
+            const netB = b.price - b.shipping - b.commission;
+            return (netA - netB) * (sortConfig.direction === 'asc' ? 1 : -1);
+        }
+        if (sortConfig.column === 'stock') {
+            const stockA = (a.stock_kol||0)+(a.stock_pith||0)+(a.stock_har||0)+(a.stock_blr||0);
+            const stockB = (b.stock_kol||0)+(b.stock_pith||0)+(b.stock_har||0)+(b.stock_blr||0);
+            return (stockA - stockB) * (sortConfig.direction === 'asc' ? 1 : -1);
+        }
+        if (sortConfig.column === 'days') {
+            const daysA = a.drr > 0 ? ((a.stock_kol||0)+(a.stock_pith||0)+(a.stock_har||0)+(a.stock_blr||0))/a.drr : 999;
+            const daysB = b.drr > 0 ? ((b.stock_kol||0)+(b.stock_pith||0)+(b.stock_har||0)+(b.stock_blr||0))/b.drr : 999;
+            return (daysA - daysB) * (sortConfig.direction === 'asc' ? 1 : -1);
+        }
+        if (sortConfig.column === 'roas') {
+            const roasA = a.spend > 0 ? (a.price*a.orders/a.spend) : 0;
+            const roasB = b.spend > 0 ? (b.price*b.orders/b.spend) : 0;
+            return (roasA - roasB) * (sortConfig.direction === 'asc' ? 1 : -1);
+        }
+        if (sortConfig.column === 'cvr') {
+            const cvrA = a.clicks > 0 ? (a.orders/a.clicks) : 0;
+            const cvrB = b.clicks > 0 ? (b.orders/b.clicks) : 0;
+            return (cvrA - cvrB) * (sortConfig.direction === 'asc' ? 1 : -1);
+        }
+         if (sortConfig.column === 'ret') {
+            const retA = a.orders > 0 ? (a.returns/a.orders) : 0;
+            const retB = b.orders > 0 ? (b.returns/b.orders) : 0;
+            return (retA - retB) * (sortConfig.direction === 'asc' ? 1 : -1);
+        }
+
+
+        if (typeof aValue === 'number' && typeof bValue === 'number') {
+            return (aValue - bValue) * (sortConfig.direction === 'asc' ? 1 : -1);
+        }
+        
+        return 0;
+      });
+    }
+    return sortableItems;
+  }, [data, sortConfig]);
 
   return (
     <div className="space-y-6">
@@ -129,39 +203,46 @@ export default function DailyOpsTab({
             <Table>
                 <TableHeader className="bg-muted/50 uppercase text-[10px] tracking-wide">
                     <TableRow>
-                        <TableHead className="w-12">Ch</TableHead>
-                        <TableHead className="min-w-[180px]">SKU Name</TableHead>
-                        <TableHead className="text-center">Price</TableHead>
-                        <TableHead className="text-center">Ship</TableHead>
-                        <TableHead className="text-center">Net</TableHead>
-                        <TableHead className="text-center bg-primary/10">Stock</TableHead>
-                        <TableHead className="text-center">DRR</TableHead>
-                        <TableHead className="text-center">Days</TableHead>
-                        <TableHead className="text-center bg-accent/10">ROAS</TableHead>
-                        <TableHead className="text-center">CVR</TableHead>
-                        <TableHead className="text-center">Ret%</TableHead>
-                        <TableHead className="text-center">Rating</TableHead>
-                        <TableHead className="text-center">Revs</TableHead>
+                        <TableHead className="w-12 cursor-pointer" onClick={() => requestSort('channel')}>Ch {getSortIcon('channel')}</TableHead>
+                        <TableHead className="min-w-[180px] cursor-pointer" onClick={() => requestSort('name')}>SKU Name {getSortIcon('name')}</TableHead>
+                        <TableHead className="text-center cursor-pointer" onClick={() => requestSort('price')}>Price {getSortIcon('price')}</TableHead>
+                        <TableHead className="text-center cursor-pointer" onClick={() => requestSort('shipping')}>Ship {getSortIcon('shipping')}</TableHead>
+                        <TableHead className="text-center cursor-pointer" onClick={() => requestSort('net')}>Net {getSortIcon('net')}</TableHead>
+                        <TableHead className="text-center bg-primary/10 cursor-pointer" onClick={() => requestSort('stock')}>Stock {getSortIcon('stock')}</TableHead>
+                        <TableHead className="text-center cursor-pointer" onClick={() => requestSort('drr')}>DRR {getSortIcon('drr')}</TableHead>
+                        <TableHead className="text-center cursor-pointer" onClick={() => requestSort('days')}>Days {getSortIcon('days')}</TableHead>
+                        <TableHead className="text-center bg-accent/10 cursor-pointer" onClick={() => requestSort('roas')}>ROAS {getSortIcon('roas')}</TableHead>
+                        <TableHead className="text-center cursor-pointer" onClick={() => requestSort('cvr')}>CVR {getSortIcon('cvr')}</TableHead>
+                        <TableHead className="text-center cursor-pointer" onClick={() => requestSort('ret')}>Ret% {getSortIcon('ret')}</TableHead>
+                        <TableHead className="text-center cursor-pointer" onClick={() => requestSort('rating')}>Rating {getSortIcon('rating')}</TableHead>
+                        <TableHead className="text-center cursor-pointer" onClick={() => requestSort('reviews')}>Revs {getSortIcon('reviews')}</TableHead>
                         <TableHead className="text-center">Status</TableHead>
                         <TableHead className="w-12"></TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody className="text-xs">
-                    {data.map(item => {
+                    {sortedData.map(item => {
                         const decision = getDecision(item);
+                        const stockTotal = (item.stock_kol||0)+(item.stock_pith||0)+(item.stock_har||0)+(item.stock_blr||0);
+                        const stockDays = item.drr > 0 ? stockTotal/item.drr : 999;
+                        const roas = item.spend > 0 ? (item.price*item.orders/item.spend) : 0;
+                        const cvr = item.clicks > 0 ? (item.orders/item.clicks)*100 : 0;
+                        const ret = item.orders > 0 ? (item.returns/item.orders)*100 : 0;
+                        const net = item.price - item.shipping - (item.commission||0);
+
                         return (
                             <TableRow key={item.id}>
                                 <TableCell><Badge variant="secondary">{item.channel.charAt(0)}</Badge></TableCell>
                                 <TableCell className="font-medium">{item.name}</TableCell>
                                 <TableCell className="text-center">₹{item.price}</TableCell>
                                 <TableCell className="text-center text-muted-foreground">₹{item.shipping}</TableCell>
-                                <TableCell className="text-center font-mono text-sm">₹{Math.round(item.price - item.shipping - (item.commission||0))}</TableCell>
-                                <TableCell className="text-center bg-primary/10 font-bold">{ (item.stock_kol||0)+(item.stock_pith||0)+(item.stock_har||0)+(item.stock_blr||0) }</TableCell>
+                                <TableCell className="text-center font-mono text-sm">₹{Math.round(net)}</TableCell>
+                                <TableCell className="text-center bg-primary/10 font-bold">{stockTotal}</TableCell>
                                 <TableCell className="text-center">{item.drr}</TableCell>
-                                <TableCell className={`text-center font-bold ${item.drr > 0 && ((item.stock_kol||0)+(item.stock_pith||0)+(item.stock_har||0)+(item.stock_blr||0))/item.drr < 5 ? 'text-destructive' : ''}`}>{item.drr > 0 ? `${Math.round(((item.stock_kol||0)+(item.stock_pith||0)+(item.stock_har||0)+(item.stock_blr||0))/item.drr)}d` : '∞'}</TableCell>
-                                <TableCell className="text-center font-bold bg-accent/10">{(item.spend > 0 ? (item.price*item.orders/item.spend) : 0).toFixed(2)}</TableCell>
-                                <TableCell className="text-center">{(item.clicks>0?(item.orders/item.clicks)*100:0).toFixed(1)}%</TableCell>
-                                <TableCell className="text-center">{(item.orders>0?(item.returns/item.orders)*100:0).toFixed(1)}%</TableCell>
+                                <TableCell className={`text-center font-bold ${stockDays < 5 ? 'text-destructive' : ''}`}>{isFinite(stockDays) ? `${Math.round(stockDays)}d` : '∞'}</TableCell>
+                                <TableCell className="text-center font-bold bg-accent/10">{roas.toFixed(2)}</TableCell>
+                                <TableCell className="text-center">{cvr.toFixed(1)}%</TableCell>
+                                <TableCell className="text-center">{ret.toFixed(1)}%</TableCell>
                                 <TableCell className="text-center text-amber-500">{'★'.repeat(Math.round(item.rating||0))}</TableCell>
                                 <TableCell className="text-center text-muted-foreground">{item.reviews||0}</TableCell>
                                 <TableCell className="text-center"><Badge variant={decision.variant} className={decision.className}>{decision.text}</Badge></TableCell>
@@ -176,3 +257,5 @@ export default function DailyOpsTab({
     </div>
   );
 }
+
+    

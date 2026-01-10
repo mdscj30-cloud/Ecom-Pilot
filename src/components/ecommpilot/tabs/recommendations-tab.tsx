@@ -1,7 +1,8 @@
+
 "use client";
 
 import React, { useMemo } from "react";
-import type { Recommendation, InventoryItem } from "@/lib/types";
+import type { Recommendation, InventoryItem, SortConfig } from "@/lib/types";
 import {
   Table,
   TableBody,
@@ -11,17 +12,21 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle } from "lucide-react";
+import { CheckCircle, ArrowUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface RecommendationsTabProps {
   inventoryData: InventoryItem[];
   roasThreshold: number;
+  sortConfig: SortConfig;
+  setSortConfig: (config: SortConfig) => void;
 }
 
 export default function RecommendationsTab({
   inventoryData,
   roasThreshold,
+  sortConfig,
+  setSortConfig
 }: RecommendationsTabProps) {
 
   const recommendations = useMemo<Recommendation[]>(() => {
@@ -83,6 +88,40 @@ export default function RecommendationsTab({
         return "bg-green-600";
     };
 
+    const requestSort = (column: keyof Recommendation) => {
+      let direction: 'asc' | 'desc' = 'asc';
+      if (sortConfig.column === column && sortConfig.direction === 'asc') {
+        direction = 'desc';
+      }
+      setSortConfig({ column, direction });
+    };
+    
+    const getSortIcon = (column: keyof Recommendation) => {
+      if (sortConfig.column !== column) {
+        return <ArrowUpDown className="ml-2 h-4 w-4 inline-block opacity-50" />;
+      }
+      return sortConfig.direction === 'desc' ? '▼' : '▲';
+    };
+
+    const sortedRecommendations = useMemo(() => {
+        let sortableItems = [...recommendations];
+        if (sortConfig.column) {
+            sortableItems.sort((a, b) => {
+                const aValue = a[sortConfig.column as keyof Recommendation];
+                const bValue = b[sortConfig.column as keyof Recommendation];
+
+                if (typeof aValue === 'number' && typeof bValue === 'number') {
+                    return (aValue - bValue) * (sortConfig.direction === 'asc' ? 1 : -1);
+                }
+                if (typeof aValue === 'string' && typeof bValue === 'string') {
+                    return aValue.localeCompare(bValue) * (sortConfig.direction === 'asc' ? 1 : -1);
+                }
+                return 0;
+            });
+        }
+        return sortableItems;
+    }, [recommendations, sortConfig]);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-card p-4 rounded-xl border gap-4">
@@ -100,23 +139,23 @@ export default function RecommendationsTab({
           <Table>
             <TableHeader className="text-[10px] uppercase tracking-wide bg-muted/50">
               <TableRow>
-                <TableHead className="p-3 sticky-col bg-card border-r z-10 min-w-[180px]">
-                  SKU
+                <TableHead className="p-3 sticky-col bg-card border-r z-10 min-w-[180px] cursor-pointer" onClick={() => requestSort('sku')}>
+                  SKU {getSortIcon('sku')}
                 </TableHead>
-                <TableHead className="text-center">Inv. Health</TableHead>
-                <TableHead className="text-center">Net Value</TableHead>
-                <TableHead className="text-center bg-blue-500/10">
-                  Inventory Action
+                <TableHead className="text-center cursor-pointer" onClick={() => requestSort('stockDays')}>Inv. Health {getSortIcon('stockDays')}</TableHead>
+                <TableHead className="text-center cursor-pointer" onClick={() => requestSort('netValue')}>Net Value {getSortIcon('netValue')}</TableHead>
+                <TableHead className="text-center bg-blue-500/10 cursor-pointer" onClick={() => requestSort('inventoryAction')}>
+                  Inventory Action {getSortIcon('inventoryAction')}
                 </TableHead>
-                 <TableHead className="text-center bg-accent/10">
-                  Ad Action
+                 <TableHead className="text-center bg-accent/10 cursor-pointer" onClick={() => requestSort('adAction')}>
+                  Ad Action {getSortIcon('adAction')}
                 </TableHead>
                 <TableHead className="p-3">Remarks</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody className="text-xs">
-              {recommendations.length > 0 ? (
-                recommendations.map((rec) => (
+              {sortedRecommendations.length > 0 ? (
+                sortedRecommendations.map((rec) => (
                   <TableRow key={rec.sku}>
                     <TableCell className="p-3 sticky-col bg-card border-r font-medium text-foreground">
                       {rec.sku}
@@ -151,3 +190,5 @@ export default function RecommendationsTab({
     </div>
   );
 }
+
+    

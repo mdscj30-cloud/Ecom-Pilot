@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import type { InventoryItem, InventoryKpi } from "@/lib/types";
+import type { InventoryItem, InventoryKpi, SortConfig } from "@/lib/types";
 import KpiCard from "../kpi-card";
 import {
   Table,
@@ -20,9 +20,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Copy, Link, Check, AlertTriangle, ArrowUp, ArrowDown, Upload, Cloud, Download } from "lucide-react";
+import { Copy, Link, Upload, Cloud, Download, ArrowUpDown } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 
 
 type ViewMode = "units" | "planning" | "days" | "value";
@@ -32,9 +33,11 @@ interface InventoryTabProps {
   searchTerm: string;
   onFileUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
   onCloudImport: () => void;
+  sortConfig: SortConfig;
+  setSortConfig: (config: SortConfig) => void;
 }
 
-export default function InventoryTab({ data, searchTerm, onFileUpload, onCloudImport }: InventoryTabProps) {
+export default function InventoryTab({ data, searchTerm, onFileUpload, onCloudImport, sortConfig, setSortConfig }: InventoryTabProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("units");
 
   const filteredInventoryData = useMemo(() => {
@@ -50,7 +53,7 @@ export default function InventoryTab({ data, searchTerm, onFileUpload, onCloudIm
     const result = filteredInventoryData.reduce(
       (acc, item) => {
         const totalLocStock = (item.stock_kol || 0) + (item.stock_pith || 0) + (item.stock_har || 0) + (item.stock_blr || 0);
-        const globalCover = item.drr > 0 ? totalLocStock / item.drr : 0;
+        const globalCover = item.drr > 0 ? totalLocStock / item.drr : 999;
         
         acc.sellableValue += totalLocStock * item.price;
         
@@ -64,8 +67,8 @@ export default function InventoryTab({ data, searchTerm, onFileUpload, onCloudIm
         }
         
         const deficit = ["kol", "pith", "har", "blr"].reduce((sum, loc) => {
-            const stock = item[`stock_${loc}`] || 0;
-            const drr = item[`drr_${loc}`] || 0;
+            const stock = item[`stock_${loc}` as keyof InventoryItem] as number || 0;
+            const drr = item[`drr_${loc}` as keyof InventoryItem] as number || 0;
             return sum + Math.max(0, drr * 15 - stock);
         }, 0);
         acc.capitalNeeded += deficit * item.cost;
@@ -101,13 +104,78 @@ export default function InventoryTab({ data, searchTerm, onFileUpload, onCloudIm
     }
   };
 
+  const requestSort = (column: string) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig.column === column && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ column, direction });
+  };
+  
+  const getSortIcon = (column: string) => {
+    if (sortConfig.column !== column) {
+      return <ArrowUpDown className="ml-2 h-4 w-4 inline-block opacity-50" />;
+    }
+    return sortConfig.direction === 'desc' ? '▼' : '▲';
+  };
+
+  const sortedData = useMemo(() => {
+    let sortableItems = [...filteredInventoryData];
+     if (sortConfig.column !== null) {
+      sortableItems.sort((a, b) => {
+        // Handle simple properties
+        if (['name', 'cost'].includes(sortConfig.column!)) {
+            const aValue = a[sortConfig.column as keyof InventoryItem];
+            const bValue = b[sortConfig.column as keyof InventoryItem];
+            if (typeof aValue === 'string' && typeof bValue === 'string') {
+                return aValue.localeCompare(bValue) * (sortConfig.direction === 'asc' ? 1 : -1);
+            }
+            if (typeof aValue === 'number' && typeof bValue === 'number') {
+                return (aValue - bValue) * (sortConfig.direction === 'asc' ? 1 : -1);
+            }
+        }
+
+        // Handle complex/derived properties
+        let aValue = 0;
+        let bValue = 0;
+
+        switch(sortConfig.column) {
+            case 'cover':
+                aValue = a.drr > 0 ? ((a.stock_kol || 0) + (a.stock_pith || 0) + (a.stock_har || 0) + (a.stock_blr || 0)) / a.drr : 999;
+                bValue = b.drr > 0 ? ((b.stock_kol || 0) + (b.stock_pith || 0) + (b.stock_har || 0) + (b.stock_blr || 0)) / b.drr : 999;
+                break;
+            case 'rop':
+                 aValue = Math.ceil(a.drr * 10);
+                 bValue = Math.ceil(b.drr * 10);
+                break;
+            case 'reorderIn':
+                const ropA = Math.ceil(a.drr * 10);
+                const stockA = (a.stock_kol || 0) + (a.stock_pith || 0) + (a.stock_har || 0) + (a.stock_blr || 0);
+                aValue = a.drr > 0 ? Math.round((stockA - ropA) / a.drr) : 99;
+
+                const ropB = Math.ceil(b.drr * 10);
+                const stockB = (b.stock_kol || 0) + (b.stock_pith || 0) + (b.stock_har || 0) + (b.stock_blr || 0);
+                bValue = b.drr > 0 ? Math.round((stockB - ropB) / b.drr) : 99;
+                break;
+            case 'planReq':
+                aValue = ["kol", "pith", "har", "blr"].reduce((sum, loc) => sum + Math.max(0, (a[`drr_${loc}` as keyof InventoryItem] as number|| 0) * 15 - (a[`stock_${loc}` as keyof InventoryItem] as number || 0)), 0);
+                bValue = ["kol", "pith", "har", "blr"].reduce((sum, loc) => sum + Math.max(0, (b[`drr_${loc}` as keyof InventoryItem] as number|| 0) * 15 - (b[`stock_${loc}` as keyof InventoryItem] as number || 0)), 0);
+                break;
+        }
+
+        return (aValue - bValue) * (sortConfig.direction === 'asc' ? 1 : -1);
+      });
+    }
+    return sortableItems;
+  }, [filteredInventoryData, sortConfig]);
+
 
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <KpiCard title="Sellable Value" value={`₹${(kpis.sellableValue/100000).toFixed(2)} L`} className="text-green-600" />
         <KpiCard title="Need (15d Cover)" value={`₹${(kpis.capitalNeeded/100000).toFixed(2)} L`} className="text-primary" />
-        <KpiCard title="Avg Cover" value={`${Math.round(kpis.avgCover)} Days`} className="text-primary" />
+        <KpiCard title="Avg Cover" value={`${isFinite(kpis.avgCover) ? Math.round(kpis.avgCover) : 'N/A'} Days`} className="text-primary" />
         <KpiCard title="Stockouts (<8d)" value={`${kpis.stockouts} SKUs`} className="text-destructive" />
         <KpiCard title="Stuck Capital (>40d)" value={`₹${(kpis.stuckCapital/100000).toFixed(2)} L`} className="text-amber-600" />
       </div>
@@ -177,18 +245,18 @@ export default function InventoryTab({ data, searchTerm, onFileUpload, onCloudIm
                 <Table>
                     <TableHeader className="text-[10px] uppercase tracking-wide bg-muted/50">
                         <TableRow>
-                            <TableHead className="p-3 sticky-col bg-card border-r min-w-[150px] z-20">SKU Name</TableHead>
-                            <TableHead className="text-center">Cost</TableHead>
+                            <TableHead className="p-3 sticky-col bg-card border-r min-w-[150px] z-20 cursor-pointer" onClick={() => requestSort('name')}>SKU Name {getSortIcon('name')}</TableHead>
+                            <TableHead className="text-center cursor-pointer" onClick={() => requestSort('cost')}>Cost {getSortIcon('cost')}</TableHead>
                             <TableHead colSpan={2} className="text-center bg-blue-500/10">Kol</TableHead>
                             <TableHead colSpan={2} className="text-center bg-purple-500/10">Pith</TableHead>
                             <TableHead colSpan={2} className="text-center bg-orange-500/10">Har</TableHead>
                             <TableHead colSpan={2} className="text-center bg-cyan-500/10">Blr</TableHead>
-                            <TableHead className="text-center bg-muted">Cover</TableHead>
+                            <TableHead className="text-center bg-muted cursor-pointer" onClick={() => requestSort('cover')}>Cover {getSortIcon('cover')}</TableHead>
                             <TableHead className="text-center bg-muted">Trend</TableHead>
-                            <TableHead className="text-center bg-muted">ROP</TableHead>
-                            <TableHead className="text-center bg-muted">Reorder In</TableHead>
+                            <TableHead className="text-center bg-muted cursor-pointer" onClick={() => requestSort('rop')}>ROP {getSortIcon('rop')}</TableHead>
+                            <TableHead className="text-center bg-muted cursor-pointer" onClick={() => requestSort('reorderIn')}>Reorder In {getSortIcon('reorderIn')}</TableHead>
                             <TableHead className="text-center bg-muted border-r">Status</TableHead>
-                            <TableHead className="text-center bg-yellow-500/10">Plan</TableHead>
+                            <TableHead className="text-center bg-yellow-500/10 cursor-pointer" onClick={() => requestSort('planReq')}>Plan Req {getSortIcon('planReq')}</TableHead>
                         </TableRow>
                         <TableRow className="text-[9px] bg-muted/50">
                             <TableHead className="sticky-col bg-card border-r z-20"></TableHead>
@@ -206,12 +274,12 @@ export default function InventoryTab({ data, searchTerm, onFileUpload, onCloudIm
                         </TableRow>
                     </TableHeader>
                     <TableBody className="text-xs">
-                        {filteredInventoryData.map(item => {
+                        {sortedData.map(item => {
                             const totalLocStock = (item.stock_kol || 0) + (item.stock_pith || 0) + (item.stock_har || 0) + (item.stock_blr || 0);
                             const globalCover = item.drr > 0 ? totalLocStock / item.drr : 999;
                             const rop = Math.ceil(item.drr * 10); // Reorder point at 10 days of stock
                             const daysToRop = item.drr > 0 ? Math.round((totalLocStock - rop) / item.drr) : 99;
-                            const totalDeficit = ["kol", "pith", "har", "blr"].reduce((sum, loc) => sum + Math.max(0, (item[`drr_${loc}`] || 0) * 15 - (item[`stock_${loc}`] || 0)), 0);
+                            const totalDeficit = ["kol", "pith", "har", "blr"].reduce((sum, loc) => sum + Math.max(0, ((item[`drr_${loc}` as keyof InventoryItem] as number) || 0) * 15 - ((item[`stock_${loc}` as keyof InventoryItem] as number) || 0)), 0);
                             
                             const getStatus = () => {
                                 if (item.drr === 0 && totalLocStock > 0) return <span className="text-slate-500 font-bold">Slow Moving</span>;
@@ -228,7 +296,7 @@ export default function InventoryTab({ data, searchTerm, onFileUpload, onCloudIm
                                     <TableCell className="text-center">{renderCell(item.stock_pith || 0, item.drr_pith || 0, item.cost, viewMode)}</TableCell><TableCell className="text-center border-r loc-group-border text-muted-foreground">{item.drr_pith || 0}</TableCell>
                                     <TableCell className="text-center">{renderCell(item.stock_har || 0, item.drr_har || 0, item.cost, viewMode)}</TableCell><TableCell className="text-center border-r loc-group-border text-muted-foreground">{item.drr_har || 0}</TableCell>
                                     <TableCell className="text-center">{renderCell(item.stock_blr || 0, item.drr_blr || 0, item.cost, viewMode)}</TableCell><TableCell className="text-center border-r loc-group-border text-muted-foreground">{item.drr_blr || 0}</TableCell>
-                                    <TableCell className="text-center font-bold text-foreground">{Math.round(globalCover)}d</TableCell>
+                                    <TableCell className={cn("text-center font-bold text-foreground", globalCover < 8 ? 'text-destructive' : globalCover > 40 ? 'text-amber-600' : 'text-green-600')}>{isFinite(globalCover) ? `${Math.round(globalCover)}d` : '∞'}</TableCell>
                                     <TableCell className="text-center text-lg">{item.id % 2 === 0 ? <ArrowUp className="w-4 h-4 mx-auto text-green-500" /> : <ArrowDown className="w-4 h-4 mx-auto text-red-400" />}</TableCell>
                                     <TableCell className="text-center text-muted-foreground">{rop}</TableCell>
                                     <TableCell className={`text-center font-bold ${daysToRop < 3 ? 'text-destructive' : ''}`}>{daysToRop < 0 ? 0 : daysToRop}d</TableCell>
@@ -252,3 +320,5 @@ export default function InventoryTab({ data, searchTerm, onFileUpload, onCloudIm
     </div>
   );
 }
+
+    

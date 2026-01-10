@@ -77,7 +77,7 @@ export default function MainView() {
   const initializeData = useCallback(() => {
     setDisplayData(masterData);
     setDailyData(null);
-    setGrowthData(null);
+    setGrowthData(growthMasterData);
   }, []);
 
   const handleReset = () => {
@@ -117,18 +117,20 @@ export default function MainView() {
   }, [filteredData]);
 
   useEffect(() => {
-    const channelFiltered =
+    let channelFiltered =
       currentChannel === "All"
         ? displayData
         : displayData.filter(
             (item) => item.channel.toLowerCase() === currentChannel.toLowerCase()
           );
 
-    const searchFiltered = channelFiltered.filter((item) =>
-      item.name.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-
-    setFilteredData(searchFiltered);
+    if (searchTerm) {
+        channelFiltered = channelFiltered.filter((item) =>
+          item.name.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+    }
+    
+    setFilteredData(channelFiltered);
   }, [searchTerm, currentChannel, displayData]);
 
 
@@ -144,12 +146,11 @@ export default function MainView() {
       const json = XLSX.utils.sheet_to_json<any>(worksheet, { header: 1 });
 
       if (type === 'inventory') {
-          const headers: string[] = json[0];
+          const headers: string[] = json[0].map((h:string) => h.toLowerCase().replace(/\s+/g, '_'));
           const importedData: InventoryItem[] = json.slice(1).map((row: any[], index: number) => {
             const item: any = {};
             headers.forEach((header, i) => {
-              const key = header.toLowerCase().replace(/\s+/g, '_');
-              item[key] = row[i];
+              item[header] = row[i];
             });
 
             const drr_kol = parseInt(item.kol_drr, 10) || 0;
@@ -161,7 +162,7 @@ export default function MainView() {
               id: Date.now() + index,
               channel: item.channel || 'Amazon',
               name: item.sku_name,
-              type: 'B2C', // Default or determine from data
+              type: 'B2C', 
               price: parseFloat(item.price) || 0,
               cost: parseFloat(item.cost) || 0,
               shipping: parseFloat(item.shipping) || 0,
@@ -173,11 +174,11 @@ export default function MainView() {
               stock_unalloc: parseInt(item.unalloc_stock, 10) || 0,
               stock_factory: parseInt(item.factory_stock, 10) || 0,
               stock_wip: parseInt(item.wip_stock, 10) || 0,
-              drr_kol: drr_kol,
-              drr_pith: drr_pith,
-              drr_har: drr_har,
-              drr_blr: drr_blr,
-              drr: drr_kol + drr_pith + drr_har + drr_blr, // Sum of all DRRs
+              drr_kol,
+              drr_pith,
+              drr_har,
+              drr_blr,
+              drr: drr_kol + drr_pith + drr_har + drr_blr,
               spend: parseFloat(item.ad_spend) || 0,
               orders: parseInt(item.orders, 10) || 0,
               returns: parseInt(item.returns, 10) || 0,
@@ -432,6 +433,8 @@ export default function MainView() {
                 onAddSku={() => setAddSkuModalOpen(true)}
                 onFileUpload={(e) => handleFileUpload(e, 'inventory')}
                 onCloudImport={() => openCloudImport('daily')}
+                sortConfig={sortConfig}
+                setSortConfig={setSortConfig}
             />
         </TabsContent>
         <TabsContent value="inventory">
@@ -440,6 +443,8 @@ export default function MainView() {
                 searchTerm={searchTerm}
                 onFileUpload={(e) => handleFileUpload(e, 'inventory')}
                 onCloudImport={() => openCloudImport('inventory')}
+                sortConfig={sortConfig}
+                setSortConfig={setSortConfig}
               />
             </TabsContent>
 
@@ -458,7 +463,12 @@ export default function MainView() {
                  />
         </TabsContent>
         <TabsContent value="recommendations">
-                <RecommendationsTab inventoryData={displayData} roasThreshold={roasThreshold} />
+                <RecommendationsTab 
+                  inventoryData={displayData} 
+                  roasThreshold={roasThreshold} 
+                  sortConfig={sortConfig}
+                  setSortConfig={setSortConfig}
+                />
             </TabsContent>
       </Tabs>
 
@@ -495,3 +505,5 @@ export default function MainView() {
     </>
   );
 }
+
+    
