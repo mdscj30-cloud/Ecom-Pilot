@@ -60,7 +60,6 @@ export default function MainView() {
   const [searchTerm, setSearchTerm] = useState("");
   const [sortConfig, setSortConfig] = useState<SortConfig>({ column: 'name', direction: 'asc' });
   const [roasThreshold, setRoasThreshold] = useState(1.5);
-  const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
 
   // Modals
   const [isModalOpen, setModalOpen] = useState(false);
@@ -385,6 +384,11 @@ export default function MainView() {
     setPendingCloudType(type);
     setModalOpen(true);
   };
+  
+  const handleDeleteSku = (id: number) => {
+    setDisplayData(prev => prev.filter(item => item.id !== id));
+    toast({ title: "SKU Removed", description: `The item has been removed from the list.` });
+  };
 
 
   if (!isClient) {
@@ -435,6 +439,7 @@ export default function MainView() {
                 onCloudImport={() => openCloudImport('daily')}
                 sortConfig={sortConfig}
                 setSortConfig={setSortConfig}
+                onDeleteSku={handleDeleteSku}
             />
         </TabsContent>
         <TabsContent value="inventory">
