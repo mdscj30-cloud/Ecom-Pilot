@@ -10,9 +10,10 @@ import {
 
 interface HeaderProps {
   onReset: () => void;
+  onSyncAll: () => void;
 }
 
-export default function Header({ onReset }: HeaderProps) {
+export default function Header({ onReset, onSyncAll }: HeaderProps) {
   return (
     <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
       <div>
@@ -28,7 +29,7 @@ export default function Header({ onReset }: HeaderProps) {
         </p>
       </div>
       <div className="flex items-center gap-2 text-xs bg-card p-2 rounded-lg border shadow-sm">
-        <Button size="sm" variant="outline" className="bg-primary/10 border-primary/20 text-primary hover:bg-primary/20 font-bold">
+        <Button size="sm" variant="outline" className="bg-primary/10 border-primary/20 text-primary hover:bg-primary/20 font-bold" onClick={onSyncAll}>
           <CloudLightning className="mr-1.5 h-3.5 w-3.5" />
           Sync All
         </Button>

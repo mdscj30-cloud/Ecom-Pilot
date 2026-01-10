@@ -35,7 +35,7 @@ import InventoryTab from "./tabs/inventory-tab";
 import PnlTab from "./tabs/pnl-tab";
 import RecommendationsTab from "./tabs/recommendations-tab";
 import GrowthTab from "./tabs/growth-tab";
-import { CloudImportModal, AddSkuModal } from "./modals";
+import { AddSkuModal } from "./modals";
 
 const channelIcons = {
   daily: Activity,
@@ -44,6 +44,15 @@ const channelIcons = {
   growth: TrendingUp,
   recommendations: CheckCircle,
 };
+
+// --- IMPORTANT: Paste your Google Sheet URLs here ---
+const GOOGLE_SHEET_URLS: Record<'inventory' | 'daily' | 'growth', string> = {
+  inventory: 'YOUR_INVENTORY_SHEET_URL_HERE', // For Daily Ops & Inventory tabs
+  daily: 'YOUR_DAILY_PNL_SHEET_URL_HERE',    // For Daily P&L tab
+  growth: 'YOUR_GROWTH_SHEET_URL_HERE',      // For Growth tab
+};
+// ----------------------------------------------------
+
 
 export default function MainView() {
   const { toast } = useToast();
@@ -62,9 +71,7 @@ export default function MainView() {
   const [roasThreshold, setRoasThreshold] = useState(1.5);
 
   // Modals
-  const [isModalOpen, setModalOpen] = useState(false);
   const [isAddSkuModalOpen, setAddSkuModalOpen] = useState(false);
-  const [pendingCloudType, setPendingCloudType] = useState<TabId | null>(null);
 
   const [isClient, setIsClient] = useState(false);
   useEffect(() => {
@@ -344,13 +351,15 @@ export default function MainView() {
     if(event.target) event.target.value = '';
   };
   
-  const handleCloudSync = async (url: string, type: TabId | null) => {
-    if (!type) {
-        toast({ variant: 'destructive', title: "Sync Error", description: "No data type specified for sync."});
+  const handleCloudSync = async (dataType: 'inventory' | 'daily' | 'growth') => {
+    const url = GOOGLE_SHEET_URLS[dataType];
+
+    if (!url || url.includes('YOUR_SHEET_URL_HERE')) {
+        toast({ variant: 'destructive', title: "Sync Error", description: `URL for ${dataType} data is not configured.`});
         return;
     }
 
-    toast({ title: "Sync Initiated", description: `Fetching data from Google Sheets...` });
+    toast({ title: "Sync Initiated", description: `Fetching ${dataType} data from Google Sheets...` });
     try {
         const response = await fetch(`/api/sheets?url=${encodeURIComponent(url)}`);
         if (!response.ok) {
@@ -359,20 +368,7 @@ export default function MainView() {
         }
         const data = await response.arrayBuffer();
         
-        let dataType: 'inventory' | 'daily' | 'growth' | null = null;
-        if (type === 'daily' || type === 'inventory') {
-            dataType = 'inventory';
-        } else if (type === 'dailypnl') {
-            dataType = 'daily';
-        } else if (type === 'growth') {
-             dataType = 'growth';
-        }
-
-        if (dataType) {
-            processSheetData(data, dataType);
-        } else {
-            throw new Error("Invalid data type for cloud sync.");
-        }
+        processSheetData(data, dataType);
 
     } catch (error) {
         console.error("Cloud sync error:", error);
@@ -381,9 +377,10 @@ export default function MainView() {
     }
   };
 
-  const openCloudImport = (type: TabId) => {
-    setPendingCloudType(type);
-    setModalOpen(true);
+  const handleSyncAll = async () => {
+    await handleCloudSync('inventory');
+    await handleCloudSync('daily');
+    await handleCloudSync('growth');
   };
   
   const handleDeleteSku = (id: number) => {
@@ -398,7 +395,7 @@ export default function MainView() {
 
   return (
     <>
-      <Header onReset={handleReset} />
+      <Header onReset={handleReset} onSyncAll={handleSyncAll} />
       {alerts.length > 0 && (
         <Alert variant="destructive" className="mb-6">
           <AlertTriangle className="h-4 w-4" />
@@ -437,7 +434,7 @@ export default function MainView() {
                 setSearchTerm={setSearchTerm}
                 onAddSku={() => setAddSkuModalOpen(true)}
                 onFileUpload={(e) => handleFileUpload(e, 'inventory')}
-                onCloudImport={() => openCloudImport('daily')}
+                onCloudImport={() => handleCloudSync('inventory')}
                 sortConfig={sortConfig}
                 setSortConfig={setSortConfig}
                 onDeleteSku={handleDeleteSku}
@@ -448,7 +445,7 @@ export default function MainView() {
                 data={displayData} 
                 searchTerm={searchTerm}
                 onFileUpload={(e) => handleFileUpload(e, 'inventory')}
-                onCloudImport={() => openCloudImport('inventory')}
+                onCloudImport={() => handleCloudSync('inventory')}
                 sortConfig={sortConfig}
                 setSortConfig={setSortConfig}
               />
@@ -458,14 +455,14 @@ export default function MainView() {
                 <PnlTab 
                     data={dailyData}
                     onFileUpload={(e) => handleFileUpload(e, 'daily')}
-                    onCloudImport={() => openCloudImport('dailypnl')}
+                    onCloudImport={() => handleCloudSync('daily')}
                  />
         </TabsContent>
          <TabsContent value="growth">
                 <GrowthTab
                     data={growthData}
                     onFileUpload={(e) => handleFileUpload(e, 'growth')}
-                    onCloudImport={() => openCloudImport('growth')}
+                    onCloudImport={() => handleCloudSync('growth')}
                  />
         </TabsContent>
         <TabsContent value="recommendations">
@@ -478,15 +475,6 @@ export default function MainView() {
             </TabsContent>
       </Tabs>
 
-      <CloudImportModal
-        isOpen={isModalOpen}
-        onClose={() => setModalOpen(false)}
-        onSync={(url) => {
-            handleCloudSync(url, pendingCloudType);
-            setModalOpen(false);
-        }}
-        type={pendingCloudType}
-      />
       <AddSkuModal
         isOpen={isAddSkuModalOpen}
         onClose={() => setAddSkuModalOpen(false)}

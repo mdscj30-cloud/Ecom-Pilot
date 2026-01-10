@@ -28,6 +28,7 @@ interface CloudImportModalProps {
   type: TabId | null;
 }
 
+// This component is no longer used but is kept in case it's needed later.
 export function CloudImportModal({
   isOpen,
   onClose,
@@ -58,7 +59,7 @@ export function CloudImportModal({
             placeholder="https://docs.google.com/.../pub?output=csv"
           />
            <p className="text-xs text-muted-foreground">
-            Go to your sheet, click File &gt; Share &gt; Publish to web. Select "Comma-separated values (.csv)" and copy the link.
+            Go to your sheet, click File {'>'} Share {'>'} Publish to web. Select "Comma-separated values (.csv)" and copy the link.
           </p>
         </div>
         <DialogFooter>
@@ -140,5 +141,3 @@ export function AddSkuModal({ isOpen, onClose, onSave }: AddSkuModalProps) {
     </Dialog>
   );
 }
-
-    
