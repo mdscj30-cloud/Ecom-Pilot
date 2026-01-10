@@ -18,6 +18,7 @@ import type {
   TabId,
   SortConfig,
   Channel,
+  ProcessedSheetData
 } from "@/lib/types";
 import { masterData } from "@/lib/data";
 import { getAiRecommendations } from "@/lib/actions";
@@ -25,6 +26,7 @@ import {
   InventoryRecommendationsOutput,
   InventoryRecommendationsInput,
 } from "@/ai/flows/generate-inventory-recommendations";
+import { format, parse } from 'date-fns';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -51,10 +53,8 @@ export default function MainView() {
   const [activeTab, setActiveTab] = useState<TabId>("daily");
   const [displayData, setDisplayData] = useState<InventoryItem[]>([]);
   const [filteredData, setFilteredData] = useState<InventoryItem[]>([]);
-  const [growthData, setGrowthData] = useState<MatrixData | null>(null);
-  const [dailyData, setDailyData] = useState<MatrixData | null>(null);
-  const [growthLabels, setGrowthLabels] = useState<string[]>([]);
-  const [dailyLabels, setDailyLabels] = useState<string[]>([]);
+  const [growthData, setGrowthData] = useState<ProcessedSheetData[] | null>(null);
+  const [dailyData, setDailyData] = useState<ProcessedSheetData[] | null>(null);
 
   // Filters & Thresholds
   const [currentChannel, setCurrentChannel] = useState<Channel>("All");
@@ -161,82 +161,35 @@ export default function MainView() {
             }));
             setDisplayData(processed as InventoryItem[]);
         } else if (type === 'growth' || type === 'daily') {
-             const raw_data = XLSX.utils.sheet_to_json<any>(worksheet, { header: 1 });
-            if (raw_data.length < 2) {
-              throw new Error("Sheet must have at least 2 header rows for platforms and metrics.");
-            }
-
-            const mainHeaders = raw_data[0];
-            const subHeaders = raw_data[1];
-            const body = raw_data.slice(2);
+            const jsonData = XLSX.utils.sheet_to_json<any>(worksheet);
             
-            const matrixData: MatrixData = {};
-            const labels: string[] = [];
+            const processedData: ProcessedSheetData[] = jsonData.map((row: any) => {
+              const date = parse(row.Date, 'M/d/yyyy', new Date());
+              const gmv = Number(row.GMV) || 0;
+              const units = Number(row.Units) || 0;
+              const adsSpent = Number(row['Ads Spent']) || 0;
 
-            // Extract labels (Month/Date) from the first column
-            body.forEach(row => {
-                if (row[0]) {
-                    labels.push(row[0]);
-                }
-            });
+              return {
+                date: date,
+                channel: row.Channel,
+                gmv: gmv,
+                units: units,
+                packets: Number(row.Packets) || 0,
+                adsSpent: adsSpent,
+                avgAsp: Number(row['Avg ASP']) || 0,
+                tacos: gmv > 0 ? adsSpent / gmv : 0,
+                month: format(date, 'MMM'),
+                year: format(date, 'yyyy'),
+                day: format(date, 'd'),
+                revenuePerUnit: units > 0 ? gmv / units : 0,
+                adsPerUnit: units > 0 ? adsSpent / units : 0,
+              };
+            }).filter(d => !isNaN(d.date.getTime()));
             
-            let currentPlatform: string | null = null;
-            
-            mainHeaders.forEach((header, index) => {
-                // A new platform is identified by a non-empty cell in the first header row.
-                if (header) {
-                    currentPlatform = String(header).trim();
-                    if (currentPlatform && !matrixData[currentPlatform]) {
-                        matrixData[currentPlatform] = { name: currentPlatform, gmv:[], units:[], packets:[], spend:[], asp:[], tacos:[], share:[], roas: [] };
-                    }
-                }
-
-                if (currentPlatform) {
-                    const subHeader = String(subHeaders[index]).trim();
-                    const platformData = matrixData[currentPlatform];
-
-                    body.forEach((row, rowIndex) => {
-                        const rawValue = row[index];
-                        const value = typeof rawValue === 'string' ? parseFloat(rawValue.replace(/[^0-9.-]+/g,"")) : (rawValue || 0);
-
-                        switch(subHeader) {
-                            case 'GMV':
-                                platformData.gmv[rowIndex] = (platformData.gmv[rowIndex] || 0) + value;
-                                break;
-                            case 'Units':
-                                platformData.units[rowIndex] = (platformData.units[rowIndex] || 0) + value;
-                                break;
-                            case 'Packets':
-                                platformData.packets[rowIndex] = (platformData.packets[rowIndex] || 0) + value;
-                                break;
-                            case 'Ads Spent':
-                                platformData.spend[rowIndex] = (platformData.spend[rowIndex] || 0) + value;
-                                break;
-                            case 'Avg ASP':
-                                platformData.asp[rowIndex] = value; // This is usually not summed
-                                break;
-                            case 'TACOS':
-                                platformData.tacos[rowIndex] = value; // This is usually not summed
-                                break;
-                        }
-                    });
-                }
-            });
-            
-            // Post-process to calculate ROAS for each platform
-            Object.values(matrixData).forEach(platform => {
-              platform.roas = platform.gmv.map((gmv, i) => {
-                const spend = platform.spend[i] || 0;
-                return spend > 0 ? gmv / spend : 0;
-              });
-            });
-
             if (type === 'growth') {
-                setGrowthData(matrixData);
-                setGrowthLabels(labels);
+                setGrowthData(processedData);
             } else { // daily
-                setDailyData(matrixData);
-                setDailyLabels(labels);
+                setDailyData(processedData);
             }
         }
       
@@ -407,7 +360,6 @@ export default function MainView() {
         <TabsContent value="growth">
              <GrowthTab 
                 data={growthData} 
-                labels={growthLabels}
                 onFileUpload={(e) => handleFileUpload(e, 'growth')} 
                 onCloudImport={() => openCloudImport('growth')}
              />
@@ -415,7 +367,6 @@ export default function MainView() {
         <TabsContent value="dailypnl">
              <PnlTab 
                 data={dailyData} 
-                labels={dailyLabels}
                 onFileUpload={(e) => handleFileUpload(e, 'daily')}
                 onCloudImport={() => openCloudImport('dailypnl')}
              />

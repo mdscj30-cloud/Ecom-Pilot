@@ -43,6 +43,22 @@ export interface InventoryKpi {
   stuckCapital: number;
 }
 
+export interface ProcessedSheetData {
+  date: Date;
+  channel: string;
+  gmv: number;
+  units: number;
+  packets: number;
+  adsSpent: number;
+  avgAsp: number;
+  tacos: number;
+  month: string;
+  year: string;
+  day: string;
+  revenuePerUnit: number;
+  adsPerUnit: number;
+}
+
 export interface MatrixData {
   [key: string]: {
     name: string;
