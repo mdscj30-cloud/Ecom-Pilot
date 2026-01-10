@@ -378,7 +378,7 @@ export default function GrowthTab({ data, onFileUpload, onCloudImport }: GrowthT
                             const isOpen = openCollapsibles.includes(monthKey);
                             return (
                                 <Collapsible asChild key={monthKey} open={isOpen} onOpenChange={() => toggleCollapsible(monthKey)}>
-                                    <tbody >
+                                    <React.Fragment>
                                         <TableRow className="cursor-pointer" onClick={() => toggleCollapsible(monthKey)}>
                                             <TableCell>
                                                 <CollapsibleTrigger asChild>
@@ -426,7 +426,7 @@ export default function GrowthTab({ data, onFileUpload, onCloudImport }: GrowthT
                                                 </td>
                                             </tr>
                                         </CollapsibleContent>
-                                    </tbody>
+                                    </React.Fragment>
                                 </Collapsible>
                             )
                         })}

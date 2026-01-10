@@ -451,8 +451,8 @@ export default function PnlTab({ data, onFileUpload, onCloudImport }: PnlTabProp
                             const dateKey = format(item.date, 'yyyy-MM-dd');
                             const isOpen = openCollapsibles.includes(dateKey);
                             return (
-                                <Collapsible asChild key={dateKey} open={isOpen} onOpenChange={() => toggleCollapsible(dateKey)}>
-                                    <tbody>
+                                <Collapsible key={dateKey} asChild open={isOpen} onOpenChange={() => toggleCollapsible(dateKey)}>
+                                    <React.Fragment>
                                         <TableRow className="cursor-pointer">
                                             <TableCell>
                                                 <CollapsibleTrigger asChild>
@@ -500,7 +500,7 @@ export default function PnlTab({ data, onFileUpload, onCloudImport }: PnlTabProp
                                                 </td>
                                             </tr>
                                         </CollapsibleContent>
-                                    </tbody>
+                                    </React.Fragment>
                                 </Collapsible>
                             )
                         })}
