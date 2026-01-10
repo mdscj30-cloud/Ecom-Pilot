@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
@@ -125,70 +124,110 @@ export default function MainView() {
 
   const processSheetData = (data: ArrayBuffer, type: 'inventory' | 'growth' | 'daily') => {
     try {
-      const workbook = XLSX.read(data, { type: "array" });
-      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-      const jsonData = XLSX.utils.sheet_to_json<any>(worksheet);
+        const workbook = XLSX.read(data, { type: "array" });
+        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+        
+        if (type === 'inventory') {
+            const jsonData = XLSX.utils.sheet_to_json<any>(worksheet);
+            const mapped = jsonData.map((item, idx) => ({ 
+                id: item.id || Date.now() + idx, 
+                name: item['SKU Name'] || 'Unnamed SKU',
+                channel: item['Channel'] || 'General',
+                price: parseFloat(item['Price'])||0, 
+                shipping: parseFloat(item['Shipping'])||0, 
+                commission: parseFloat(item['Commission'])||0,
+                stock_kol: parseInt(item['Kol Stock'])||0, 
+                drr_kol: parseInt(item['Kol DRR'])||0,
+                stock_pith: parseInt(item['Pith Stock'])||0,
+                drr_pith: parseInt(item['Pith DRR'])||0,
+                stock_har: parseInt(item['Har Stock'])||0,
+                drr_har: parseInt(item['Har DRR'])||0,
+                stock_blr: parseInt(item['Blr Stock'])||0,
+                drr_blr: parseInt(item['Blr DRR'])||0,
+                spend: parseFloat(item['Ad Spend'])||0, 
+                orders: parseInt(item['Orders'])||0, 
+                returns: parseInt(item['Returns'])||0,
+                impr: parseInt(item['Impressions']) || 0,
+                clicks: parseInt(item['Clicks']) || 0,
+                ads_active: !!item['Ads Active'],
+                rating: parseFloat(item['Rating']) || 0, 
+                reviews: parseInt(item['Reviews']) || 0,
+                type: 'B2C',
+                stock_unalloc: 0, stock_factory:0, stock_wip:0
+            }));
+            const processed = mapped.map(d => ({
+                ...d,
+                drr: (d.drr_kol||0) + (d.drr_pith||0) + (d.drr_har||0) + (d.drr_blr||0)
+            }));
+            setDisplayData(processed as InventoryItem[]);
+        } else if (type === 'growth' || type === 'daily') {
+            const raw_data = XLSX.utils.sheet_to_json<any>(worksheet, { header: 1 });
+            if (raw_data.length < 2) {
+              throw new Error("Sheet must have at least 2 header rows.");
+            }
 
-      if (type === 'inventory') {
-          const mapped = jsonData.map((item, idx) => ({ 
-              id: item.id || Date.now() + idx, 
-              name: item['SKU Name'] || 'Unnamed SKU',
-              channel: item['Channel'] || 'General',
-              price: parseFloat(item['Price'])||0, 
-              shipping: parseFloat(item['Shipping'])||0, 
-              commission: parseFloat(item['Commission'])||0,
-              stock_kol: parseInt(item['Kol Stock'])||0, 
-              drr_kol: parseInt(item['Kol DRR'])||0,
-              stock_pith: parseInt(item['Pith Stock'])||0,
-              drr_pith: parseInt(item['Pith DRR'])||0,
-              stock_har: parseInt(item['Har Stock'])||0,
-              drr_har: parseInt(item['Har DRR'])||0,
-              stock_blr: parseInt(item['Blr Stock'])||0,
-              drr_blr: parseInt(item['Blr DRR'])||0,
-              spend: parseFloat(item['Ad Spend'])||0, 
-              orders: parseInt(item['Orders'])||0, 
-              returns: parseInt(item['Returns'])||0,
-              impr: parseInt(item['Impressions']) || 0,
-              clicks: parseInt(item['Clicks']) || 0,
-              ads_active: !!item['Ads Active'],
-              rating: parseFloat(item['Rating']) || 0, 
-              reviews: parseInt(item['Reviews']) || 0,
-              type: 'B2C',
-              stock_unalloc: 0, stock_factory:0, stock_wip:0
-          }));
-          const processed = mapped.map(d => ({
-              ...d,
-              drr: (d.drr_kol||0) + (d.drr_pith||0) + (d.drr_har||0) + (d.drr_blr||0)
-          }));
-          setDisplayData(processed as InventoryItem[]);
-      } else if (type === 'growth' || type === 'daily') {
-          const labels = Object.keys(jsonData[0]).slice(1);
-          const matrixData: MatrixData = {};
-          jsonData.forEach(row => {
-              const metric = row.Metric;
-              if (!metric) return;
-              const values = labels.map(label => parseFloat(row[label]) || 0);
-              if (!matrixData[metric]) {
-                  matrixData[metric] = {
-                      name: metric,
-                      gmv: [], units: [], packets: [], spend: [], asp: [], tacos: [], share: [],
-                  };
+            const mainHeaders = raw_data[0];
+            const subHeaders = raw_data[1];
+            const body = raw_data.slice(2);
+            
+            const matrixData: MatrixData = {};
+            const labels: string[] = [];
+
+            const platformKeys = ['GMV', 'Units', 'Packets', 'Ads Spent', 'Avg ASP', 'TACOS'];
+            
+            // Find platform columns
+            const platformStarts: { name: string; startIndex: number }[] = [];
+            mainHeaders.forEach((header, index) => {
+              if (typeof header === 'string' && header.match(/^\d+ of \d+:/)) {
+                platformStarts.push({ name: header, startIndex: index });
               }
-              // This is a simplification; you might need a more robust mapping
-              if (metric.toLowerCase().includes('gmv')) matrixData[metric].gmv = values;
-              else if (metric.toLowerCase().includes('units')) matrixData[metric].units = values;
-              else if (metric.toLowerCase().includes('spend')) matrixData[metric].spend = values;
-              else if (metric.toLowerCase().includes('asp')) matrixData[metric].asp = values;
-          });
+            });
 
-          if (type === 'growth') {
-              setGrowthData(matrixData);
-              setGrowthLabels(labels);
-          } else { // daily
-              setDailyData(matrixData);
-              setDailyLabels(labels);
-          }
-      }
+            // Process Total columns first
+            const totalStartIndex = mainHeaders.findIndex(h => typeof h === 'string' && h.includes('Total'));
+            if(totalStartIndex > -1) {
+                const totalPlatformName = mainHeaders[totalStartIndex] as string;
+                matrixData[totalPlatformName] = { name: totalPlatformName, gmv:[], units:[], packets:[], spend:[], asp:[], tacos:[], share:[] };
+                body.forEach(row => {
+                    if(!labels.includes(row[0])) labels.push(row[0]);
+                    platformKeys.forEach((key, i) => {
+                        const colIndex = totalStartIndex + 1 + i;
+                        const value = parseFloat(row[colIndex]) || 0;
+                        if(key === 'GMV') matrixData[totalPlatformName].gmv.push(value);
+                        if(key === 'Units') matrixData[totalPlatformName].units.push(value);
+                        if(key === 'Ads Spent') matrixData[totalPlatformName].spend.push(value);
+                        if(key === 'Avg ASP') matrixData[totalPlatformName].asp.push(value);
+                        if(key === 'TACOS') matrixData[totalPlatformName].tacos.push(value);
+                    });
+                });
+            }
+
+            // Process each platform
+            platformStarts.forEach(platform => {
+              matrixData[platform.name] = { name: platform.name, gmv:[], units:[], packets:[], spend:[], asp:[], tacos:[], share:[] };
+              body.forEach(row => {
+                  platformKeys.forEach((key, i) => {
+                      const subHeaderIndex = subHeaders.findIndex((sh, si) => si >= platform.startIndex && sh === key);
+                      if (subHeaderIndex > -1) {
+                        const value = parseFloat(row[subHeaderIndex]) || 0;
+                        if(key === 'GMV') matrixData[platform.name].gmv.push(value);
+                        if(key === 'Units') matrixData[platform.name].units.push(value);
+                        if(key === 'Ads Spent') matrixData[platform.name].spend.push(value);
+                        if(key === 'Avg ASP') matrixData[platform.name].asp.push(value);
+                        if(key === 'TACOS') matrixData[platform.name].tacos.push(value);
+                      }
+                  });
+              });
+            });
+
+            if (type === 'growth') {
+                setGrowthData(matrixData);
+                setGrowthLabels(labels);
+            } else { // daily
+                setDailyData(matrixData);
+                setDailyLabels(labels);
+            }
+        }
       
       toast({ title: "Import Successful", description: `${type.charAt(0).toUpperCase() + type.slice(1)} data has been loaded.` });
     } catch (error) {
@@ -232,13 +271,16 @@ export default function MainView() {
         const data = await response.arrayBuffer();
         
         let dataType: 'inventory' | 'growth' | 'daily' | null = null;
-        if (type === 'daily' || type === 'inventory') {
+        if (type === 'daily') { // Maps to inventory sheet on Daily Ops tab
             dataType = 'inventory';
         } else if (type === 'growth') {
             dataType = 'growth';
         } else if (type === 'dailypnl') {
             dataType = 'daily';
+        } else if (type === 'inventory') { // From inventory tab
+             dataType = 'inventory';
         }
+
 
         if (dataType) {
             processSheetData(data, dataType);
@@ -335,7 +377,12 @@ export default function MainView() {
             />
         </TabsContent>
         <TabsContent value="inventory">
-            <InventoryTab data={displayData} searchTerm={searchTerm} />
+            <InventoryTab 
+              data={displayData} 
+              searchTerm={searchTerm}
+              onCloudImport={() => openCloudImport('inventory')}
+              onFileUpload={(e) => handleFileUpload(e, 'inventory')}
+            />
         </TabsContent>
         <TabsContent value="growth">
              <GrowthTab 
@@ -393,7 +440,3 @@ export default function MainView() {
     </>
   );
 }
-
-    
-
-    

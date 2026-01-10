@@ -1,4 +1,3 @@
-
 "use client";
 
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Line, ComposedChart } from 'recharts';
@@ -17,7 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Tooltip as UiTooltip, TooltipContent as UiTooltipContent, TooltipProvider } from '@/components/ui/tooltip';
+import { Tooltip as UiTooltip, TooltipContent as UiTooltipContent, TooltipProvider, TooltipTrigger as UiTooltipTrigger } from '@/components/ui/tooltip';
 
 interface GrowthTabProps {
   data: MatrixData | null;
@@ -35,20 +34,25 @@ const chartConfig = {
 export default function GrowthTab({ data, labels, onFileUpload, onCloudImport }: GrowthTabProps) {
   const [chartView, setChartView] = useState('gmv_vs_spend');
   
+  const totalPlatformKey = useMemo(() => {
+    if (!data) return null;
+    return Object.keys(data).find(k => k.toLowerCase().includes('total')) || null;
+  }, [data]);
+
   const chartData = useMemo(() => {
-    if (!data || labels.length === 0) return [];
+    if (!data || labels.length === 0 || !totalPlatformKey) return [];
     
     return labels.map((label, index) => {
       const entry: { name: string; [key: string]: any } = { name: label };
-      const gmv = (data['Total GMV']?.gmv[index] || 0) / 100000; // in Lakhs
-      const spend = (data['Total Ad Spend']?.spend[index] || 0) / 100000; // in Lakhs
+      const gmv = (data[totalPlatformKey]?.gmv[index] || 0) / 100000; // in Lakhs
+      const spend = (data[totalPlatformKey]?.spend[index] || 0) / 100000; // in Lakhs
       entry.gmv = gmv;
       entry.spend = spend;
       entry.roas = spend > 0 ? gmv / spend : 0;
       return entry;
     });
 
-  }, [data, labels]);
+  }, [data, labels, totalPlatformKey]);
 
   if (!data) {
     return (
@@ -173,19 +177,19 @@ export default function GrowthTab({ data, labels, onFileUpload, onCloudImport }:
               <Table>
                 <TableHeader>
                     <TableRow>
-                        <TableHead>Metric</TableHead>
-                        {labels.map(label => <TableHead key={label} className="text-right">{label}</TableHead>)}
+                        <TableHead>Platform</TableHead>
+                        {labels.map(label => <TableHead key={label} className="text-right">{label} (GMV)</TableHead>)}
                     </TableRow>
                 </TableHeader>
                 <TableBody>
-                    {Object.values(data).map(metricData => (
-                      <TableRow key={metricData.name}>
-                          <TableCell className="font-medium">{metricData.name}</TableCell>
+                    {Object.values(data).map(platformData => (
+                      <TableRow key={platformData.name}>
+                          <TableCell className="font-medium">{platformData.name.split(': ').slice(-1)[0]}</TableCell>
                           {labels.map((_, index) => {
-                              const value = (metricData.gmv[index] || metricData.spend[index] || metricData.asp[index] || 0);
+                              const value = (platformData.gmv[index] || 0);
                               return (
                                   <TableCell key={index} className="text-right font-mono">
-                                      {value.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                                      {value.toLocaleString('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 })}
                                   </TableCell>
                               )
                           })}
@@ -199,6 +203,3 @@ export default function GrowthTab({ data, labels, onFileUpload, onCloudImport }:
     </div>
   );
 }
-
-
-    

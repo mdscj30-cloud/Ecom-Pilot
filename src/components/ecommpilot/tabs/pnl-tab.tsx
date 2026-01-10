@@ -34,13 +34,19 @@ const chartConfig = {
 
 export default function PnlTab({ data, labels, onFileUpload, onCloudImport }: PnlTabProps) {
   
+  const totalPlatformKey = useMemo(() => {
+    if (!data) return null;
+    return Object.keys(data).find(k => k.toLowerCase().includes('total')) || null;
+  }, [data]);
+
   const chartData = useMemo(() => {
-    if (!data || labels.length === 0) return [];
+    if (!data || labels.length === 0 || !totalPlatformKey) return [];
     
+    const totalData = data[totalPlatformKey];
+
     return labels.map((label, index) => {
-      const revenue = (data['Total GMV']?.gmv[index] || 0);
-      // Assuming costs are an aggregation of spend and other potential cost metrics
-      const costs = (data['Total Ad Spend']?.spend[index] || 0) + (data['Total Shipping']?.spend[index] || 0) + (data['Total Commission']?.spend[index] || 0);
+      const revenue = (totalData?.gmv[index] || 0);
+      const costs = (totalData?.spend[index] || 0); // Assuming spend is the main cost for now
       const profit = revenue - costs;
 
       return {
@@ -51,7 +57,7 @@ export default function PnlTab({ data, labels, onFileUpload, onCloudImport }: Pn
       };
     });
 
-  }, [data, labels]);
+  }, [data, labels, totalPlatformKey]);
 
   if (!data) {
     return (
@@ -140,25 +146,25 @@ export default function PnlTab({ data, labels, onFileUpload, onCloudImport }: Pn
       </Card>
 
       <Card>
-          <CardHeader><CardTitle className='text-base'>Raw Daily Data</CardTitle></CardHeader>
+          <CardHeader><CardTitle className='text-base'>Raw Daily Data by Platform</CardTitle></CardHeader>
           <CardContent>
             <div className="overflow-x-auto custom-scrollbar">
               <Table>
                 <TableHeader>
                     <TableRow>
-                        <TableHead>Metric</TableHead>
-                        {labels.map(label => <TableHead key={label} className="text-right">{label}</TableHead>)}
+                        <TableHead>Platform</TableHead>
+                        {labels.map(label => <TableHead key={label} className="text-right">{label} (GMV)</TableHead>)}
                     </TableRow>
                 </TableHeader>
                 <TableBody>
-                    {Object.values(data).map(metricData => (
-                      <TableRow key={metricData.name}>
-                          <TableCell className="font-medium">{metricData.name}</TableCell>
+                    {Object.values(data).map(platformData => (
+                      <TableRow key={platformData.name}>
+                          <TableCell className="font-medium">{platformData.name.split(': ').slice(-1)[0]}</TableCell>
                           {labels.map((_, index) => {
-                              const value = (metricData.gmv[index] || metricData.spend[index] || metricData.asp[index] || 0);
+                              const value = (platformData.gmv[index] || 0);
                               return (
                                   <TableCell key={index} className="text-right font-mono">
-                                      {value.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                                      {value.toLocaleString('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 })}
                                   </TableCell>
                               )
                           })}
@@ -172,7 +178,3 @@ export default function PnlTab({ data, labels, onFileUpload, onCloudImport }: Pn
     </div>
   );
 }
-
-    
-
-    
