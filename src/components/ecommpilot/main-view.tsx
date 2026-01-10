@@ -171,16 +171,25 @@ export default function MainView() {
             const dataRows = json.slice(2);
 
             const platformDetails: { name: string, startIndex: number, endIndex: number }[] = [];
+            let currentPlatform: { name: string, startIndex: number } | null = null;
+    
             platformHeaders.forEach((header, index) => {
-                if (header && typeof header === 'string' && header.match(/^\d+\s+of\s+\d+:/)) {
-                     platformDetails.push({ name: header.split(': ')[1], startIndex: index, endIndex: 0 });
+              if (header && typeof header === 'string') {
+                const match = header.match(/(?:\d+\s+of\s+\d+:\s*)?(.*)/);
+                const platformName = match ? match[1].trim() : null;
+                
+                if (platformName && metricHeaders[index] === 'GMV') {
+                  if (currentPlatform) {
+                    platformDetails.push({ ...currentPlatform, endIndex: index - 1 });
+                  }
+                  currentPlatform = { name: platformName, startIndex: index };
                 }
+              }
             });
-            
-            platformDetails.forEach((p, i) => {
-                const nextPlatform = platformDetails[i+1];
-                p.endIndex = nextPlatform ? nextPlatform.startIndex - 1 : platformHeaders.length -1;
-            });
+    
+            if (currentPlatform) {
+              platformDetails.push({ ...currentPlatform, endIndex: platformHeaders.length - 1 });
+            }
 
             const processedData: ProcessedSheetData[] = [];
             dataRows.forEach(row => {
@@ -192,11 +201,15 @@ export default function MainView() {
                     const parsedDate = XLSX.SSF.parse_date_code(dateRaw);
                     date = new Date(parsedDate.y, parsedDate.m - 1, parsedDate.d, parsedDate.H, parsedDate.M, parsedDate.S);
                 } else if (typeof dateRaw === 'string') {
-                     // Try parsing formats like "MMM'yy" or other common date strings
-                    date = parse(dateRaw, "MMM'yy", new Date());
-                    if (!isValid(date)) {
-                        date = new Date(dateRaw); // Fallback for ISO strings etc.
+                    // Try parsing formats like "MMM'yy" or "dd-MMM" or other common date strings
+                    let parsedDate = parse(dateRaw, "MMM'yy", new Date());
+                    if (!isValid(parsedDate)) {
+                        parsedDate = parse(dateRaw, "dd-MMM", new Date());
                     }
+                    if (!isValid(parsedDate)) {
+                       parsedDate = new Date(dateRaw); // Fallback for ISO strings etc.
+                    }
+                    date = parsedDate;
                 } else {
                     return; // Skip if date is not a number or string
                 }
@@ -468,5 +481,7 @@ export default function MainView() {
     </>
   );
 }
+
+    
 
     
