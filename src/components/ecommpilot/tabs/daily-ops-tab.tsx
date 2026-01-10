@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import type { InventoryItem, Kpi, SortConfig, Channel } from "@/lib/types";
+import type { InventoryItem, Kpi, Channel } from "@/lib/types";
 import KpiCard from "../kpi-card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -15,12 +15,9 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import {
-  Link,
-  Copy,
   Upload,
   Plus,
   Trash2,
-  ArrowUpDown,
 } from "lucide-react";
 import {
   Tooltip,
@@ -34,14 +31,10 @@ interface DailyOpsTabProps {
   kpis: Kpi;
   roasThreshold: number;
   setRoasThreshold: (value: number) => void;
-  cvrThreshold: number;
-  setCvrThreshold: (value: number) => void;
   currentChannel: Channel;
   setCurrentChannel: (channel: Channel) => void;
   searchTerm: string;
   setSearchTerm: (term: string) => void;
-  sortConfig: SortConfig;
-  setSortConfig: (config: SortConfig) => void;
   onAddSku: () => void;
   onFileUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
 }
@@ -162,3 +155,5 @@ export default function DailyOpsTab({
     </div>
   );
 }
+
+    

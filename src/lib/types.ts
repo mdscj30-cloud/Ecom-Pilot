@@ -31,9 +31,6 @@ export interface InventoryItem {
 export interface Kpi {
   revenue: number;
   spend: number;
-  roas: number;
-  cvr: number;
-  returns: number;
   stock: number;
   skus: number;
 }
@@ -68,3 +65,5 @@ export type SortConfig = {
 };
 
 export type Channel = 'All' | 'Meesho' | 'Amazon';
+
+    

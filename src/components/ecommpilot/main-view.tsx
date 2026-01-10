@@ -10,13 +10,11 @@ import {
   Box,
   Calendar,
   CheckCircle,
-  LayoutDashboard,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type {
   InventoryItem,
   Kpi,
-  InventoryKpi,
   MatrixData,
   TabId,
   SortConfig,
@@ -64,7 +62,6 @@ export default function MainView() {
   const [searchTerm, setSearchTerm] = useState("");
   const [sortConfig, setSortConfig] = useState<SortConfig>({ column: null, direction: "desc" });
   const [roasThreshold, setRoasThreshold] = useState(3.0);
-  const [cvrThreshold, setCvrThreshold] = useState(7);
   const [recTargetRoas, setRecTargetRoas] = useState(3.0);
 
   // UI State
@@ -80,7 +77,7 @@ export default function MainView() {
 
   // === DATA PROCESSING & CALCULATIONS ===
   const kpis = useMemo<Kpi>(() => {
-    return displayData.reduce(
+    return (filteredData || []).reduce(
       (acc, item) => {
         const revenue = (item.price || 0) * (item.orders || 0);
         acc.revenue += revenue;
@@ -88,9 +85,9 @@ export default function MainView() {
         acc.stock += (item.stock_kol || 0) + (item.stock_pith || 0) + (item.stock_har || 0) + (item.stock_blr || 0);
         return acc;
       },
-      { revenue: 0, spend: 0, roas: 0, cvr: 0, returns: 0, stock: 0, skus: displayData.length }
+      { revenue: 0, spend: 0, stock: 0, skus: filteredData.length }
     );
-  }, [displayData]);
+  }, [filteredData]);
   
   // === EFFECTS ===
   useEffect(() => {
@@ -120,6 +117,9 @@ export default function MainView() {
         drr: (d.drr_kol||0) + (d.drr_pith||0) + (d.drr_har||0) + (d.drr_blr||0)
     }));
     setDisplayData(processed);
+    setGrowthData(null);
+    setDailyData(null);
+    setRecommendations([]);
     toast({ title: "Data Reset", description: "Loaded initial dataset." });
   };
   
@@ -136,9 +136,9 @@ export default function MainView() {
         const data = new Uint8Array(e.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: "array" });
         const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-        
+        const jsonData = XLSX.utils.sheet_to_json<any>(worksheet);
+
         if (type === 'inventory') {
-            const jsonData = XLSX.utils.sheet_to_json<any>(worksheet);
             const mapped = jsonData.map((item, idx) => ({ 
                 id: item.id || Date.now() + idx, 
                 name: item['SKU Name'] || 'Unnamed SKU',
@@ -157,9 +157,9 @@ export default function MainView() {
                 spend: parseFloat(item['Ad Spend'])||0, 
                 orders: parseInt(item['Orders'])||0, 
                 returns: parseInt(item['Returns'])||0,
-                impr: 0,
-                clicks: 0,
-                ads_active: false,
+                impr: parseInt(item['Impressions']) || 0,
+                clicks: parseInt(item['Clicks']) || 0,
+                ads_active: !!item['Ads Active'],
                 rating: parseFloat(item['Rating']) || 0, 
                 reviews: parseInt(item['Reviews']) || 0,
                 type: 'B2C',
@@ -170,6 +170,32 @@ export default function MainView() {
                 drr: (d.drr_kol||0) + (d.drr_pith||0) + (d.drr_har||0) + (d.drr_blr||0)
             }));
             setDisplayData(processed as InventoryItem[]);
+        } else if (type === 'growth' || type === 'daily') {
+            const labels = Object.keys(jsonData[0]).slice(1);
+            const matrixData: MatrixData = {};
+            jsonData.forEach(row => {
+                const metric = row.Metric;
+                const values = labels.map(label => parseFloat(row[label]) || 0);
+                if (!matrixData[metric]) {
+                    matrixData[metric] = {
+                        name: metric,
+                        gmv: [], units: [], packets: [], spend: [], asp: [], tacos: [], share: [],
+                    };
+                }
+                // This is a simplification; you might need a more robust mapping
+                if (metric.toLowerCase().includes('gmv')) matrixData[metric].gmv = values;
+                else if (metric.toLowerCase().includes('units')) matrixData[metric].units = values;
+                else if (metric.toLowerCase().includes('spend')) matrixData[metric].spend = values;
+                else if (metric.toLowerCase().includes('asp')) matrixData[metric].asp = values;
+            });
+
+            if (type === 'growth') {
+                setGrowthData(matrixData);
+                setGrowthLabels(labels);
+            } else { // daily
+                setDailyData(matrixData);
+                setDailyLabels(labels);
+            }
         }
         
         toast({ title: "Import Successful", description: `${type.charAt(0).toUpperCase() + type.slice(1)} data has been loaded.` });
@@ -253,14 +279,10 @@ export default function MainView() {
                 kpis={kpis}
                 roasThreshold={roasThreshold}
                 setRoasThreshold={setRoasThreshold}
-                cvrThreshold={cvrThreshold}
-                setCvrThreshold={setCvrThreshold}
                 currentChannel={currentChannel}
                 setCurrentChannel={setCurrentChannel}
                 searchTerm={searchTerm}
                 setSearchTerm={setSearchTerm}
-                sortConfig={sortConfig}
-                setSortConfig={setSortConfig}
                 onAddSku={() => setAddSkuModalOpen(true)}
                 onFileUpload={(e) => handleFileUpload(e, 'inventory')}
             />
@@ -269,10 +291,18 @@ export default function MainView() {
             <InventoryTab data={displayData} searchTerm={searchTerm} />
         </TabsContent>
         <TabsContent value="growth">
-             <GrowthTab />
+             <GrowthTab 
+                data={growthData} 
+                labels={growthLabels}
+                onFileUpload={(e) => handleFileUpload(e, 'growth')} 
+             />
         </TabsContent>
         <TabsContent value="dailypnl">
-             <PnlTab />
+             <PnlTab 
+                data={dailyData} 
+                labels={dailyLabels}
+                onFileUpload={(e) => handleFileUpload(e, 'daily')}
+             />
         </TabsContent>
         <TabsContent value="recommendations">
             <RecommendationsTab 
