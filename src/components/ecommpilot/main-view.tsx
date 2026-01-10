@@ -77,7 +77,7 @@ export default function MainView() {
   const initializeData = useCallback(() => {
     setDisplayData(masterData);
     setDailyData(null);
-    setGrowthData(null);
+    setGrowthData(growthMasterData.length > 0 ? growthMasterData : null);
   }, []);
 
   const handleReset = () => {

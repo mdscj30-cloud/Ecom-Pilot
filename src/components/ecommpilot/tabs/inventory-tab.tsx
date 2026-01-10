@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useMemo } from "react";
@@ -36,11 +37,7 @@ interface InventoryTabProps {
 export default function InventoryTab({ data, searchTerm, onFileUpload, onCloudImport }: InventoryTabProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("units");
 
-  const inventoryData = useMemo(() => {
-    return data.filter((item) => {
-      return searchTerm ? item.name.toLowerCase().includes(searchTerm.toLowerCase()) : true;
-    });
-  }, [data, searchTerm]);
+  const inventoryData = data;
 
   const kpis = useMemo<InventoryKpi>(() => {
     return inventoryData.reduce(
@@ -82,6 +79,13 @@ export default function InventoryTab({ data, searchTerm, onFileUpload, onCloudIm
             return stock;
     }
   };
+  
+  const filteredInventoryData = useMemo(() => {
+    return inventoryData.filter((item) => {
+      return searchTerm ? item.name.toLowerCase().includes(searchTerm.toLowerCase()) : true;
+    });
+  }, [inventoryData, searchTerm]);
+
 
   return (
     <div className="space-y-6">
@@ -185,7 +189,7 @@ export default function InventoryTab({ data, searchTerm, onFileUpload, onCloudIm
                         </TableRow>
                     </TableHeader>
                     <TableBody className="text-xs">
-                        {inventoryData.map(item => {
+                        {filteredInventoryData.map(item => {
                             const totalLocStock = (item.stock_kol || 0) + (item.stock_pith || 0) + (item.stock_har || 0) + (item.stock_blr || 0);
                             const globalCover = item.drr > 0 ? totalLocStock / item.drr : 999;
                             const rop = Math.ceil(item.drr * 10);
