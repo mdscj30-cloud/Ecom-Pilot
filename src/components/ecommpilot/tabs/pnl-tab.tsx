@@ -5,7 +5,7 @@ import { Line, ComposedChart, XAxis, YAxis, CartesianGrid, Legend, Tooltip, Bar,
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
 import { Button } from '@/components/ui/button';
-import { Calendar as CalendarIcon, Upload, Cloud, Download, ArrowUp, ArrowDown } from "lucide-react";
+import { Calendar as CalendarIcon, Upload, Cloud, Download, ArrowUp, ArrowDown, ChevronDown, ChevronRight } from "lucide-react";
 import React, { useMemo, useState } from 'react';
 import type { ProcessedSheetData } from '@/lib/types';
 import {
@@ -23,6 +23,8 @@ import { format, startOfToday, endOfToday } from 'date-fns';
 import KpiCard from '../kpi-card';
 import { cn } from '@/lib/utils';
 import { DateRange } from 'react-day-picker';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+
 
 interface PnlTabProps {
   data: ProcessedSheetData[] | null;
@@ -55,6 +57,7 @@ export default function PnlTab({ data, onFileUpload, onCloudImport }: PnlTabProp
 
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' });
   const [channelSortConfig, setChannelSortConfig] = useState<{ key: ChannelSortKey; direction: 'asc' | 'desc' }>({ key: 'gmv', direction: 'desc' });
+  const [openCollapsibles, setOpenCollapsibles] = useState<string[]>([]);
   
   React.useEffect(() => {
     if (data && data.length > 0) {
@@ -78,18 +81,22 @@ export default function PnlTab({ data, onFileUpload, onCloudImport }: PnlTabProp
       return { dailyKpis: kpis, dailyChartData: [], dailyTableData: [], channelPerformance: [] };
     }
 
-    const dailyDataMap: { [key: string]: { date: Date, gmv: number; adsSpent: number; units: number } } = {};
+    const dailyDataMap: { [key: string]: { date: Date, platforms: { [key: string]: ProcessedSheetData } } } = {};
     const channelDataMap: { [key: string]: { gmv: number; adsSpent: number; units: number } } = {};
     
     filteredData.forEach(d => {
       const day = format(d.date, 'yyyy-MM-dd');
       if (!dailyDataMap[day]) {
-        dailyDataMap[day] = { date: d.date, gmv: 0, adsSpent: 0, units: 0 };
+        dailyDataMap[day] = { date: d.date, platforms: {} };
       }
-      dailyDataMap[day].gmv += d.gmv;
-      dailyDataMap[day].adsSpent += d.adsSpent;
-      dailyDataMap[day].units += d.units;
-
+      if(!dailyDataMap[day].platforms[d.channel]){
+        dailyDataMap[day].platforms[d.channel] = {...d};
+      } else {
+        dailyDataMap[day].platforms[d.channel].gmv += d.gmv;
+        dailyDataMap[day].platforms[d.channel].adsSpent += d.adsSpent;
+        dailyDataMap[day].platforms[d.channel].units += d.units;
+      }
+      
       if (!channelDataMap[d.channel]) {
           channelDataMap[d.channel] = { gmv: 0, adsSpent: 0, units: 0 };
       }
@@ -98,15 +105,25 @@ export default function PnlTab({ data, onFileUpload, onCloudImport }: PnlTabProp
       channelDataMap[d.channel].units += d.units;
     });
 
-    const chartData = Object.values(dailyDataMap).map(d => ({
-        date: d.date,
-        day: format(d.date, 'dd/MM'),
-        gmv: d.gmv,
-        adsSpent: d.adsSpent,
-        tacos: d.gmv > 0 ? (d.adsSpent / d.gmv) : 0,
-        units: d.units,
-        avgAsp: d.units > 0 ? d.gmv / d.units : 0,
-    }));
+    const chartData = Object.values(dailyDataMap).map(dayData => {
+        let totalDayGmv = 0, totalDayAds = 0, totalDayUnits = 0;
+        Object.values(dayData.platforms).forEach(p => {
+            totalDayGmv += p.gmv;
+            totalDayAds += p.adsSpent;
+            totalDayUnits += p.units;
+        });
+        
+        return {
+            date: dayData.date,
+            day: format(dayData.date, 'dd/MM'),
+            gmv: totalDayGmv,
+            adsSpent: totalDayAds,
+            tacos: totalDayGmv > 0 ? (totalDayAds / totalDayGmv) : 0,
+            units: totalDayUnits,
+            avgAsp: totalDayUnits > 0 ? totalDayGmv / totalDayUnits : 0,
+            platforms: Object.values(dayData.platforms)
+        };
+    });
     
     chartData.forEach(d => {
       kpis.totalGmv += d.gmv;
@@ -123,8 +140,8 @@ export default function PnlTab({ data, onFileUpload, onCloudImport }: PnlTabProp
         const valB = b.date.getTime();
         return sortConfig.direction === 'asc' ? valA - valB : valB - valA;
       }
-      const valA = a[sortConfig.key];
-      const valB = b[sortConfig.key];
+      const valA = a[sortConfig.key as keyof typeof a] as number;
+      const valB = b[sortConfig.key as keyof typeof b] as number;
       if (typeof valA === 'number' && typeof valB === 'number') {
         return sortConfig.direction === 'asc' ? valA - valB : valB - valA;
       }
@@ -178,6 +195,12 @@ export default function PnlTab({ data, onFileUpload, onCloudImport }: PnlTabProp
         return channelSortConfig.direction === 'desc' ? <ArrowDown className="w-3 h-3 ml-1 inline" /> : <ArrowUp className="w-3 h-3 ml-1 inline" />;
     }
     return null;
+  };
+  
+  const toggleCollapsible = (date: string) => {
+    setOpenCollapsibles(prev => 
+      prev.includes(date) ? prev.filter(d => d !== date) : [...prev, date]
+    );
   };
 
   if (!data) {
@@ -392,7 +415,7 @@ export default function PnlTab({ data, onFileUpload, onCloudImport }: PnlTabProp
                                 <CartesianGrid strokeDasharray="3 3" />
                                 <XAxis type="number" tickFormatter={(value) => `${(value as number * 100).toFixed(0)}%`}/>
                                 <YAxis type="category" dataKey="channel" width={100} fontSize={12} />
-                                <Tooltip content={<ChartTooltipContent formatter={(value) => `${(Number(value) * 100).toFixed(2)}%`}/>}/>
+                                <Tooltip content={<UiTooltipContent formatter={(value) => `${(Number(value) * 100).toFixed(2)}%`}/>}/>
                                 <Bar dataKey="tacos" fill="var(--color-tacos)">
                                     {channelPerformance.map((entry, index) => (
                                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
@@ -408,12 +431,13 @@ export default function PnlTab({ data, onFileUpload, onCloudImport }: PnlTabProp
         <Card>
              <CardHeader>
                 <CardTitle className="text-base">Daily Breakdown Table</CardTitle>
-                 <CardDescription>Metrics for each day in the selected range.</CardDescription>
+                 <CardDescription>Metrics for each day in the selected range. Click a row to see platform details.</CardDescription>
             </CardHeader>
-            <CardContent className="overflow-y-auto max-h-[400px] custom-scrollbar">
+            <CardContent className="overflow-y-auto max-h-[600px] custom-scrollbar">
                 <Table>
-                    <TableHeader className="sticky top-0 bg-card">
+                    <TableHeader className="sticky top-0 bg-card z-10">
                         <TableRow>
+                            <TableHead className="w-12"></TableHead>
                             <TableHead className="cursor-pointer" onClick={() => requestSort('date')}>Date {getSortIcon('date')}</TableHead>
                             <TableHead className="cursor-pointer text-right" onClick={() => requestSort('gmv')}>GMV {getSortIcon('gmv')}</TableHead>
                             <TableHead className="cursor-pointer text-right" onClick={() => requestSort('adsSpent')}>Ads Spent {getSortIcon('adsSpent')}</TableHead>
@@ -423,16 +447,63 @@ export default function PnlTab({ data, onFileUpload, onCloudImport }: PnlTabProp
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {dailyTableData.map(item => (
-                            <TableRow key={format(item.date, 'yyyy-MM-dd')}>
-                                <TableCell className="font-medium">{format(item.date, 'MMM dd, yyyy')}</TableCell>
-                                <TableCell className="text-right">₹{item.gmv.toLocaleString(undefined, {maximumFractionDigits: 0})}</TableCell>
-                                <TableCell className="text-right">₹{item.adsSpent.toLocaleString(undefined, {maximumFractionDigits: 0})}</TableCell>
-                                <TableCell className="text-right">{(item.tacos * 100).toFixed(2)}%</TableCell>
-                                <TableCell className="text-right">{item.units.toLocaleString()}</TableCell>
-                                <TableCell className="text-right">₹{item.avgAsp.toFixed(0)}</TableCell>
-                            </TableRow>
-                        ))}
+                        {dailyTableData.map(item => {
+                            const dateKey = format(item.date, 'yyyy-MM-dd');
+                            const isOpen = openCollapsibles.includes(dateKey);
+                            return (
+                                <Collapsible asChild key={dateKey} open={isOpen} onOpenChange={() => toggleCollapsible(dateKey)}>
+                                    <>
+                                        <TableRow className="cursor-pointer">
+                                            <TableCell>
+                                                <CollapsibleTrigger asChild>
+                                                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                                                        {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                                                    </Button>
+                                                </CollapsibleTrigger>
+                                            </TableCell>
+                                            <TableCell className="font-medium">{format(item.date, 'MMM dd, yyyy')}</TableCell>
+                                            <TableCell className="text-right">₹{item.gmv.toLocaleString(undefined, {maximumFractionDigits: 0})}</TableCell>
+                                            <TableCell className="text-right">₹{item.adsSpent.toLocaleString(undefined, {maximumFractionDigits: 0})}</TableCell>
+                                            <TableCell className="text-right">{(item.tacos * 100).toFixed(2)}%</TableCell>
+                                            <TableCell className="text-right">{item.units.toLocaleString()}</TableCell>
+                                            <TableCell className="text-right">₹{item.avgAsp.toFixed(0)}</TableCell>
+                                        </TableRow>
+                                        <CollapsibleContent asChild>
+                                             <tr>
+                                                <td colSpan={7} className="p-0">
+                                                    <div className="bg-muted/50 p-4">
+                                                        <Table>
+                                                            <TableHeader>
+                                                                <TableRow>
+                                                                    <TableHead>Platform</TableHead>
+                                                                    <TableHead className="text-right">GMV</TableHead>
+                                                                    <TableHead className="text-right">Ads Spent</TableHead>
+                                                                    <TableHead className="text-right">TACOS</TableHead>
+                                                                    <TableHead className="text-right">Units</TableHead>
+                                                                    <TableHead className="text-right">Avg ASP</TableHead>
+                                                                </TableRow>
+                                                            </TableHeader>
+                                                            <TableBody>
+                                                                {item.platforms.map(p => (
+                                                                    <TableRow key={p.channel}>
+                                                                        <TableCell className="font-medium">{p.channel}</TableCell>
+                                                                        <TableCell className="text-right">₹{p.gmv.toLocaleString(undefined, {maximumFractionDigits: 0})}</TableCell>
+                                                                        <TableCell className="text-right">₹{p.adsSpent.toLocaleString(undefined, {maximumFractionDigits: 0})}</TableCell>
+                                                                        <TableCell className="text-right">{(p.gmv > 0 ? (p.adsSpent / p.gmv) * 100 : 0).toFixed(2)}%</TableCell>
+                                                                        <TableCell className="text-right">{p.units.toLocaleString()}</TableCell>
+                                                                        <TableCell className="text-right">₹{(p.units > 0 ? p.gmv / p.units : 0).toFixed(0)}</TableCell>
+                                                                    </TableRow>
+                                                                ))}
+                                                            </TableBody>
+                                                        </Table>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        </CollapsibleContent>
+                                    </>
+                                </Collapsible>
+                            )
+                        })}
                     </TableBody>
                 </Table>
             </CardContent>
@@ -441,3 +512,6 @@ export default function PnlTab({ data, onFileUpload, onCloudImport }: PnlTabProp
   );
 }
 
+
+
+    
