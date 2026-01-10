@@ -174,12 +174,12 @@ export default function MainView() {
             let currentPlatform: { name: string, startIndex: number } | null = null;
     
             platformHeaders.forEach((header, index) => {
-              if (header && typeof header === 'string') {
+              if (header && typeof header === 'string' && header.trim() !== '') {
                 const match = header.match(/(?:\d+\s*(?:and\s*\d+)?\s*of\s+\d+:\s*)?(.*)/);
-                const platformName = match ? match[1].trim() : null;
+                const platformName = match ? match[1].trim() : header.trim();
                 
                 if (platformName && metricHeaders[index] === 'GMV') {
-                  if (currentPlatform) {
+                  if (currentPlatform && currentPlatform.name !== 'Total') {
                     platformDetails.push({ ...currentPlatform, endIndex: index - 1 });
                   }
                   currentPlatform = { name: platformName, startIndex: index };
@@ -187,7 +187,7 @@ export default function MainView() {
               }
             });
     
-            if (currentPlatform) {
+            if (currentPlatform && currentPlatform.name !== 'Total') {
               platformDetails.push({ ...currentPlatform, endIndex: platformHeaders.length - 1 });
             }
 
@@ -485,6 +485,8 @@ export default function MainView() {
     </>
   );
 }
+
+    
 
     
 
