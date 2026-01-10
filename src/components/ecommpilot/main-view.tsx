@@ -297,7 +297,7 @@ export default function MainView() {
 
     toast({ title: "Sync Initiated", description: `Fetching data from Google Sheets...` });
     try {
-        const response = await fetch(url);
+        const response = await fetch(`/api/sheets?url=${encodeURIComponent(url)}`);
         if (!response.ok) {
             throw new Error(`Failed to fetch: ${response.statusText}`);
         }
