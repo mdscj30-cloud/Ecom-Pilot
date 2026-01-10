@@ -50,7 +50,7 @@ export default function MainView() {
   const [activeTab, setActiveTab] = useState<TabId>("daily");
   const [displayData, setDisplayData] = useState<InventoryItem[]>([]);
   const [filteredData, setFilteredData] = useState<InventoryItem[]>([]);
-  const [growthData, setGrowthData] = useState<ProcessedSheetData[] | null>(initialGrowthData);
+  const [growthData, setGrowthData] = useState<ProcessedSheetData[] | null>(null);
   const [dailyData, setDailyData] = useState<ProcessedSheetData[] | null>(null);
 
   // Filters & Thresholds
@@ -109,7 +109,7 @@ export default function MainView() {
         drr: (d.drr_kol||0) + (d.drr_pith||0) + (d.drr_har||0) + (d.drr_blr||0)
     }));
     setDisplayData(processed);
-    setGrowthData(initialGrowthData);
+    setGrowthData(null);
     setDailyData(null);
     toast({ title: "Data Reset", description: "Loaded initial dataset." });
   };
