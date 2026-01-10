@@ -173,26 +173,26 @@ export default function MainView() {
             const dataRows = json.slice(2);
 
             const platformDetails: { name: string, startIndex: number, endIndex: number }[] = [];
-            let currentPlatform: { name: string, startIndex: number } | null = null;
-    
+            let currentPlatformName: string | null = null;
+            let currentPlatformStartIndex = -1;
+
             platformHeaders.forEach((header, index) => {
-              if (header && typeof header === 'string' && header.trim() !== '') {
-                // Regex to capture the platform name, ignoring prefixes like "1 of 8: " or "4and5 of 8: "
-                const match = header.match(/(?:\d+(?:and\d+)?\s*of\s+\d+:\s*)?(.*)/);
-                const platformName = match ? match[1].trim() : header.trim();
-                
-                // A new platform starts when we see a GMV column
-                if (platformName && metricHeaders[index] === 'GMV') {
-                  if (currentPlatform) {
-                    platformDetails.push({ ...currentPlatform, endIndex: index - 1 });
-                  }
-                  currentPlatform = { name: platformName, startIndex: index };
+                if (header && typeof header === 'string' && header.trim() !== '') {
+                    const match = header.match(/(?:\d+(?:and\d+)?\s*of\s+\d+:\s*)?(.*)/);
+                    const platformName = match ? match[1].trim() : header.trim();
+                    
+                    if (platformName && metricHeaders[index]?.toLowerCase() === 'gmv') {
+                        if (currentPlatformName !== null) {
+                            platformDetails.push({ name: currentPlatformName, startIndex: currentPlatformStartIndex, endIndex: index - 1 });
+                        }
+                        currentPlatformName = platformName;
+                        currentPlatformStartIndex = index;
+                    }
                 }
-              }
             });
-    
-            if (currentPlatform) {
-              platformDetails.push({ ...currentPlatform, endIndex: platformHeaders.length - 1 });
+
+            if (currentPlatformName !== null) {
+                platformDetails.push({ name: currentPlatformName, startIndex: currentPlatformStartIndex, endIndex: platformHeaders.length - 1 });
             }
 
             const processedData: ProcessedSheetData[] = [];
@@ -201,21 +201,27 @@ export default function MainView() {
                 if (!dateRaw) return;
 
                 let date: Date;
-                const dateFormatsToTry = ["MMM'yy", "dd-MMM", "yyyy-MM-dd", "MM/dd/yy"];
-                
                 if (typeof dateRaw === 'number') {
-                    // It's an Excel date serial number
-                    const excelEpoch = new Date(1899, 11, 30);
+                    const excelEpoch = new Date(Date.UTC(1899, 11, 30));
                     date = new Date(excelEpoch.getTime() + dateRaw * 86400000);
                 } else if (typeof dateRaw === 'string') {
-                    let parsedDate = new Date(dateRaw); // Try direct parsing first
-                    if (!isValid(parsedDate)) {
-                        for (const fmt of dateFormatsToTry) {
-                            parsedDate = parse(dateRaw, fmt, new Date());
-                            if (isValid(parsedDate)) break;
+                    const dateFormatsToTry = ["MMM'yy", "dd-MMM-yy", "dd-MMM", "yyyy-MM-dd", "MM/dd/yy", "M/d/yy"];
+                    let parsedDate: Date | null = null;
+                    for (const fmt of dateFormatsToTry) {
+                        const d = parse(dateRaw, fmt, new Date());
+                        if (isValid(d)) {
+                            parsedDate = d;
+                            break;
                         }
                     }
-                    date = parsedDate;
+                     if (!parsedDate && /^\d{5}$/.test(dateRaw)) { // Handle Excel date serial number as string
+                        const excelEpoch = new Date(Date.UTC(1899, 11, 30));
+                        date = new Date(excelEpoch.getTime() + parseInt(dateRaw, 10) * 86400000);
+                    } else if (parsedDate) {
+                        date = parsedDate;
+                    } else {
+                        return;
+                    }
                 } else {
                     return; // Skip if date is not a number or string
                 }
@@ -228,15 +234,15 @@ export default function MainView() {
                     for (let i = platform.startIndex; i <= platform.endIndex; i++) {
                         const metric = metricHeaders[i];
                         const value = row[i];
-                        if (value === null || value === undefined) continue;
+                        if (value === null || value === undefined || value === '-') continue;
 
-                        const numValue = (typeof value === 'string') ? parseFloat(value.replace(/,/g, '')) || 0 : (typeof value === 'number' ? value : 0);
+                        const numValue = (typeof value === 'string') ? parseFloat(value.replace(/[,₹]/g, '')) || 0 : (typeof value === 'number' ? value : 0);
                         
-                        switch (metric) {
-                            case 'GMV': gmv = numValue; break;
-                            case 'Units': units = numValue; break;
-                            case 'Packets': packets = numValue; break;
-                            case 'Ads Spent': adsSpent = numValue; break;
+                        switch (metric?.toLowerCase()) {
+                            case 'gmv': gmv += numValue; break;
+                            case 'units': units += numValue; break;
+                            case 'packets': packets += numValue; break;
+                            case 'ads spent': adsSpent += numValue; break;
                         }
                     }
 
