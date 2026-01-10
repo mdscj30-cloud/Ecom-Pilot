@@ -187,9 +187,9 @@ export default function MainView() {
                 if (!dateRaw) return;
 
                 let date: Date | null = null;
-                if (typeof dateRaw === 'number' && dateRaw > 1) {
+                if (typeof dateRaw === 'number' && dateRaw > 1) { // Excel date serial number
                     const excelEpoch = new Date(Date.UTC(1899, 11, 30));
-                    date = new Date(excelEpoch.getTime() + dateRaw * 86400000);
+                    date = new Date(excelEpoch.getTime() + (dateRaw - 1) * 86400000);
                 } else if (typeof dateRaw === 'string') {
                     const formats = ["dd-MMM-yy", "dd-MMM", "yyyy-MM-dd", "MM/dd/yy", "M/d/yy", "MMM'yy", "MMMM", "MMM yyyy"];
                     for (const fmt of formats) {
@@ -199,7 +199,7 @@ export default function MainView() {
                             break;
                         }
                     }
-                     if (!date && /^\d{5}$/.test(dateRaw)) {
+                     if (!date && /^\d{5}$/.test(dateRaw)) { // Handle 5-digit excel date string
                         const excelEpoch = new Date(Date.UTC(1899, 11, 30));
                         date = new Date(excelEpoch.getTime() + (parseInt(dateRaw, 10) -1) * 86400000);
                     }
@@ -450,3 +450,5 @@ export default function MainView() {
     </>
   );
 }
+
+    
