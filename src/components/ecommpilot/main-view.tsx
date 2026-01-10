@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
@@ -14,7 +15,6 @@ import { useToast } from "@/hooks/use-toast";
 import type {
   InventoryItem,
   Kpi,
-  MatrixData,
   TabId,
   SortConfig,
   Channel,
@@ -121,11 +121,12 @@ export default function MainView() {
     setRecommendations([]);
     toast({ title: "Data Reset", description: "Loaded initial dataset." });
   };
-
+  
   const processSheetData = (data: ArrayBuffer, type: 'inventory' | 'growth' | 'daily') => {
     try {
         const workbook = XLSX.read(data, { type: "array" });
-        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
         
         if (type === 'inventory') {
             const jsonData = XLSX.utils.sheet_to_json<any>(worksheet);
@@ -161,30 +162,88 @@ export default function MainView() {
             }));
             setDisplayData(processed as InventoryItem[]);
         } else if (type === 'growth' || type === 'daily') {
-            const jsonData = XLSX.utils.sheet_to_json<any>(worksheet);
+            const json = XLSX.utils.sheet_to_json<any>(worksheet, { header: 1 });
             
-            const processedData: ProcessedSheetData[] = jsonData.map((row: any) => {
-              const date = parse(row.Date, 'M/d/yyyy', new Date());
-              const gmv = Number(row.GMV) || 0;
-              const units = Number(row.Units) || 0;
-              const adsSpent = Number(row['Ads Spent']) || 0;
+            if (json.length < 2) {
+                throw new Error("Sheet must have at least 2 header rows.");
+            }
 
-              return {
-                date: date,
-                channel: row.Channel,
-                gmv: gmv,
-                units: units,
-                packets: Number(row.Packets) || 0,
-                adsSpent: adsSpent,
-                avgAsp: Number(row['Avg ASP']) || 0,
-                tacos: gmv > 0 ? adsSpent / gmv : 0,
-                month: format(date, 'MMM'),
-                year: format(date, 'yyyy'),
-                day: format(date, 'd'),
-                revenuePerUnit: units > 0 ? gmv / units : 0,
-                adsPerUnit: units > 0 ? adsSpent / units : 0,
-              };
-            }).filter(d => !isNaN(d.date.getTime()));
+            const platformHeaders = json[0];
+            const metricHeaders = json[1];
+            const dataRows = json.slice(2);
+            
+            const platformDetails: { name: string, startIndex: number }[] = [];
+            platformHeaders.forEach((header, index) => {
+                if (header && typeof header === 'string' && header.includes(' of 8:')) {
+                    platformDetails.push({ name: header.split(': ')[1], startIndex: index });
+                }
+            });
+
+            const processedData: ProcessedSheetData[] = [];
+
+            dataRows.forEach(row => {
+                const dateRaw = row[0];
+                if (!dateRaw) return;
+
+                // Handle Excel's numeric date format or string format
+                const date = (typeof dateRaw === 'number')
+                  ? XLSX.SSF.parse_date_code(dateRaw)
+                  : parse(dateRaw, "MMM'yy", new Date());
+
+                if (isNaN(date.getFullYear())) return; // Skip invalid dates
+                
+                const validDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+
+                platformDetails.forEach(platform => {
+                    let gmv = 0, units = 0, packets = 0, adsSpent = 0;
+
+                    for (let i = platform.startIndex; i < (platformHeaders.length); i++) {
+                         // Stop if we hit the next platform's start index
+                        const nextPlatform = platformDetails.find(p => p.startIndex > platform.startIndex);
+                        if(nextPlatform && i >= nextPlatform.startIndex) break;
+                        
+                        const metric = metricHeaders[i];
+                        const value = row[i];
+
+                        const numValue = (typeof value === 'string')
+                            ? parseFloat(value.replace(/,/g, '')) || 0
+                            : (typeof value === 'number' ? value : 0);
+
+                        switch (metric) {
+                            case 'GMV': gmv = numValue; break;
+                            case 'Units': units = numValue; break;
+                            case 'Packets': packets = numValue; break;
+                            case 'Ads Spent': adsSpent = numValue; break;
+                        }
+                    }
+
+                    if (gmv > 0 || units > 0 || adsSpent > 0) {
+                         const avgAsp = units > 0 ? gmv / units : 0;
+                         const tacos = gmv > 0 ? adsSpent / gmv : 0;
+
+                         processedData.push({
+                            date: validDate,
+                            channel: platform.name,
+                            gmv,
+                            units,
+                            packets,
+                            adsSpent,
+                            avgAsp,
+                            tacos,
+                            month: format(validDate, 'MMM'),
+                            year: format(validDate, 'yyyy'),
+                            day: format(validDate, 'd'),
+                            revenuePerUnit: units > 0 ? gmv / units : 0,
+                            adsPerUnit: units > 0 ? adsSpent / units : 0,
+                        });
+                    }
+                });
+            });
+            
+            if (processedData.length === 0) {
+                 throw new Error("No valid data was parsed from the sheet. Check the format and headers.");
+            }
             
             if (type === 'growth') {
                 setGrowthData(processedData);
@@ -203,7 +262,7 @@ export default function MainView() {
       });
     }
   };
-  
+
   const handleFileUpload = (
     event: React.ChangeEvent<HTMLInputElement>,
     type: 'inventory' | 'growth' | 'daily'
@@ -411,3 +470,5 @@ export default function MainView() {
     </>
   );
 }
+
+    
