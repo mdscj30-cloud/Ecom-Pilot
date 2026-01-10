@@ -20,6 +20,7 @@ import {
   Plus,
   Trash2,
   Cloud,
+  Download,
 } from "lucide-react";
 import {
   Tooltip,
@@ -95,6 +96,16 @@ export default function DailyOpsTab({
          <div className="ml-auto flex gap-2 items-center flex-grow sm:flex-grow-0">
              <Input placeholder="Search SKU..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="h-9 w-full sm:w-48"/>
              <TooltipProvider>
+                 <Tooltip>
+                    <TooltipTrigger asChild>
+                        <Button variant="outline" size="icon" className="h-9 w-9" asChild>
+                            <a href="/inventory-template.csv" download>
+                                <Download className="h-4 w-4" />
+                            </a>
+                        </Button>
+                    </TooltipTrigger>
+                    <TooltipContent><p>Download Template</p></TooltipContent>
+                </Tooltip>
                 <Tooltip>
                     <TooltipTrigger asChild>
                         <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => document.getElementById('inventory-upload')?.click()}><Upload className="h-4 w-4" /></Button>
@@ -108,7 +119,7 @@ export default function DailyOpsTab({
                     <TooltipContent><p>Import from Google Sheet</p></TooltipContent>
                 </Tooltip>
              </TooltipProvider>
-             <input type="file" id="inventory-upload" className="hidden" accept=".xlsx, .xls" onChange={onFileUpload}/>
+             <input type="file" id="inventory-upload" className="hidden" accept=".xlsx, .xls, .csv" onChange={onFileUpload}/>
              <Button onClick={onAddSku} size="sm"><Plus className="h-4 w-4 mr-1" /> Add SKU</Button>
          </div>
       </div>
@@ -165,7 +176,3 @@ export default function DailyOpsTab({
     </div>
   );
 }
-
-    
-
-    

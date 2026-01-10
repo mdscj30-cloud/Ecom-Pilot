@@ -19,7 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Copy, Link, Check, AlertTriangle, ArrowUp, ArrowDown, Upload, Cloud } from "lucide-react";
+import { Copy, Link, Check, AlertTriangle, ArrowUp, ArrowDown, Upload, Cloud, Download } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -115,6 +115,16 @@ export default function InventoryTab({ data, searchTerm, onFileUpload, onCloudIm
             <TooltipProvider>
                 <Tooltip>
                     <TooltipTrigger asChild>
+                        <Button variant="outline" size="icon" className="h-9 w-9" asChild>
+                            <a href="/inventory-template.csv" download>
+                                <Download className="h-4 w-4" />
+                            </a>
+                        </Button>
+                    </TooltipTrigger>
+                    <TooltipContent><p>Download Template</p></TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                    <TooltipTrigger asChild>
                         <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => document.getElementById('inventory-upload-inv-tab')?.click()}><Upload className="h-4 w-4" /></Button>
                     </TooltipTrigger>
                     <TooltipContent><p>Import from .xlsx</p></TooltipContent>
@@ -126,7 +136,7 @@ export default function InventoryTab({ data, searchTerm, onFileUpload, onCloudIm
                     <TooltipContent><p>Import from Google Sheet</p></TooltipContent>
                 </Tooltip>
              </TooltipProvider>
-             <input type="file" id="inventory-upload-inv-tab" className="hidden" accept=".xlsx, .xls" onChange={onFileUpload}/>
+             <input type="file" id="inventory-upload-inv-tab" className="hidden" accept=".xlsx, .xls, .csv" onChange={onFileUpload}/>
             <Button size="sm" variant="outline"><Copy className="w-3 h-3 mr-1" /> Copy</Button>
             <Button size="sm" variant="outline"><Link className="w-3 h-3 mr-1" /> Link</Button>
         </div>

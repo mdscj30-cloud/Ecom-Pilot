@@ -145,6 +145,9 @@ export default function MainView() {
                 drr_har: parseInt(item['Har DRR'])||0,
                 stock_blr: parseInt(item['Blr Stock'])||0,
                 drr_blr: parseInt(item['Blr DRR'])||0,
+                stock_unalloc: parseInt(item['Unalloc Stock']) || 0,
+                stock_factory: parseInt(item['Factory Stock']) || 0,
+                stock_wip: parseInt(item['WIP Stock']) || 0,
                 spend: parseFloat(item['Ad Spend'])||0, 
                 orders: parseInt(item['Orders'])||0, 
                 returns: parseInt(item['Returns'])||0,
@@ -153,8 +156,7 @@ export default function MainView() {
                 ads_active: !!item['Ads Active'],
                 rating: parseFloat(item['Rating']) || 0, 
                 reviews: parseInt(item['Reviews']) || 0,
-                type: 'B2C',
-                stock_unalloc: 0, stock_factory:0, stock_wip:0
+                type: 'B2C'
             }));
             const processed = mapped.map(d => ({
                 ...d,
@@ -175,11 +177,13 @@ export default function MainView() {
     
             platformHeaders.forEach((header, index) => {
               if (header && typeof header === 'string' && header.trim() !== '') {
-                const match = header.match(/(?:\d+\s*(?:and\s*\d+)?\s*of\s+\d+:\s*)?(.*)/);
+                // Regex to capture the platform name, ignoring prefixes like "1 of 8: " or "4and5 of 8: "
+                const match = header.match(/(?:\d+(?:and\d+)?\s*of\s+\d+:\s*)?(.*)/);
                 const platformName = match ? match[1].trim() : header.trim();
                 
+                // A new platform starts when we see a GMV column
                 if (platformName && metricHeaders[index] === 'GMV') {
-                  if (currentPlatform && currentPlatform.name !== 'Total') {
+                  if (currentPlatform) {
                     platformDetails.push({ ...currentPlatform, endIndex: index - 1 });
                   }
                   currentPlatform = { name: platformName, startIndex: index };
@@ -187,7 +191,7 @@ export default function MainView() {
               }
             });
     
-            if (currentPlatform && currentPlatform.name !== 'Total') {
+            if (currentPlatform) {
               platformDetails.push({ ...currentPlatform, endIndex: platformHeaders.length - 1 });
             }
 
@@ -485,11 +489,3 @@ export default function MainView() {
     </>
   );
 }
-
-    
-
-    
-
-    
-
-    
