@@ -403,7 +403,9 @@ export default function MainView() {
         </TabsContent>
         <TabsContent value="growth">
              <GrowthTab 
-                data={growthData} 
+                data={growthData}
+                onFileUpload={(e) => handleFileUpload(e, 'growth')}
+                onCloudImport={() => openCloudImport('growth')}
              />
         </TabsContent>
         <TabsContent value="dailypnl">
@@ -455,5 +457,8 @@ export default function MainView() {
 }
 
     
+
+    
+
 
     

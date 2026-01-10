@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from '@/components/ui/button';
-import { BarChart2, ArrowUp, ArrowDown, ChevronDown, ChevronRight } from "lucide-react";
+import { BarChart2, ArrowUp, ArrowDown, ChevronDown, ChevronRight, Download, Upload, Cloud } from "lucide-react";
 import React, { useMemo, useState } from 'react';
 import type { ProcessedSheetData } from '@/lib/types';
 import KpiCard from '../kpi-card';
@@ -21,10 +21,13 @@ import {
 import { cn } from '@/lib/utils';
 import { subMonths, startOfMonth, format } from 'date-fns';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { TooltipProvider, Tooltip as UiTooltip, TooltipContent as UiTooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 
 interface GrowthTabProps {
   data: ProcessedSheetData[] | null;
+  onFileUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  onCloudImport: () => void;
 }
 
 const chartConfig = {
@@ -40,7 +43,7 @@ type SortKey = 'channel' | 'gmv' | 'adsSpent' | 'tacos' | 'units' | 'mom';
 type MonthSortKey = 'month' | 'gmv' | 'adsSpent' | 'tacos' | 'units';
 
 
-export default function GrowthTab({ data }: GrowthTabProps) {
+export default function GrowthTab({ data, onFileUpload, onCloudImport }: GrowthTabProps) {
   const [channelSortConfig, setChannelSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' }>({ key: 'gmv', direction: 'desc' });
   const [monthSortConfig, setMonthSortConfig] = useState<{ key: MonthSortKey; direction: 'asc' | 'desc' }>({ key: 'month', direction: 'desc' });
   const [openCollapsibles, setOpenCollapsibles] = useState<string[]>([]);
@@ -228,7 +231,26 @@ export default function GrowthTab({ data }: GrowthTabProps) {
           </CardDescription>
         </CardHeader>
         <CardContent className="text-center text-muted-foreground py-16">
-          <p>No growth data loaded.</p>
+            <div className="flex flex-col items-center gap-4">
+                 <p>No growth data loaded. Please import your data.</p>
+                <div className="flex items-center gap-2">
+                    <Button size="sm" variant="outline" asChild>
+                      <a href="/growth-template.csv" download>
+                        <Download className="w-4 h-4 mr-2" />
+                        Download Template
+                      </a>
+                    </Button>
+                    <Button size="sm" variant="default" onClick={() => document.getElementById('growth-upload-placeholder')?.click()}>
+                        <Upload className="w-4 h-4 mr-2" />
+                        Import from File
+                    </Button>
+                     <Button size="sm" variant="default" onClick={onCloudImport}>
+                        <Cloud className="w-4 h-4 mr-2" />
+                        Import from Sheet
+                    </Button>
+                </div>
+                 <input type="file" id="growth-upload-placeholder" className="hidden" accept=".xlsx, .xls, .csv" onChange={onFileUpload}/>
+            </div>
         </CardContent>
       </Card>
     );
@@ -251,6 +273,31 @@ export default function GrowthTab({ data }: GrowthTabProps) {
                <div className='flex items-center gap-2'>
                   <Select value={selectedYear} onValueChange={setSelectedYear}><SelectTrigger className="w-[90px] h-9"><SelectValue /></SelectTrigger><SelectContent>{['All', ...years].map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}</SelectContent></Select>
                   <Select value={selectedChannel} onValueChange={setSelectedChannel}><SelectTrigger className="w-[120px] h-9"><SelectValue /></SelectTrigger><SelectContent>{channels.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select>
+                  <TooltipProvider>
+                    <UiTooltip>
+                        <TooltipTrigger asChild>
+                            <Button variant="outline" size="icon" className="h-9 w-9" asChild>
+                                <a href="/growth-template.csv" download>
+                                    <Download className="h-4 w-4" />
+                                </a>
+                            </Button>
+                        </TooltipTrigger>
+                        <UiTooltipContent><p>Download Template</p></UiTooltipContent>
+                    </UiTooltip>
+                    <UiTooltip>
+                        <TooltipTrigger asChild>
+                            <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => document.getElementById('growth-upload')?.click()}><Upload className="h-4 w-4" /></Button>
+                        </TooltipTrigger>
+                        <UiTooltipContent><p>Import from .xlsx</p></UiTooltipContent>
+                    </UiTooltip>
+                    <UiTooltip>
+                        <TooltipTrigger asChild>
+                            <Button variant="outline" size="icon" className="h-9 w-9" onClick={onCloudImport}><Cloud className="h-4 w-4" /></Button>
+                        </TooltipTrigger>
+                        <UiTooltipContent><p>Import from Google Sheet</p></UiTooltipContent>
+                    </UiTooltip>
+                 </TooltipProvider>
+                 <input type="file" id="growth-upload" className="hidden" accept=".xlsx, .xls, .csv" onChange={onFileUpload}/>
                </div>
             </div>
          </CardHeader>
@@ -427,4 +474,4 @@ export default function GrowthTab({ data }: GrowthTabProps) {
   );
 }
 
-
+    
