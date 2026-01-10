@@ -122,6 +122,84 @@ export default function MainView() {
     setRecommendations([]);
     toast({ title: "Data Reset", description: "Loaded initial dataset." });
   };
+
+  const processSheetData = (data: ArrayBuffer, type: 'inventory' | 'growth' | 'daily') => {
+    try {
+      const workbook = XLSX.read(data, { type: "array" });
+      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+      const jsonData = XLSX.utils.sheet_to_json<any>(worksheet);
+
+      if (type === 'inventory') {
+          const mapped = jsonData.map((item, idx) => ({ 
+              id: item.id || Date.now() + idx, 
+              name: item['SKU Name'] || 'Unnamed SKU',
+              channel: item['Channel'] || 'General',
+              price: parseFloat(item['Price'])||0, 
+              shipping: parseFloat(item['Shipping'])||0, 
+              commission: parseFloat(item['Commission'])||0,
+              stock_kol: parseInt(item['Kol Stock'])||0, 
+              drr_kol: parseInt(item['Kol DRR'])||0,
+              stock_pith: parseInt(item['Pith Stock'])||0,
+              drr_pith: parseInt(item['Pith DRR'])||0,
+              stock_har: parseInt(item['Har Stock'])||0,
+              drr_har: parseInt(item['Har DRR'])||0,
+              stock_blr: parseInt(item['Blr Stock'])||0,
+              drr_blr: parseInt(item['Blr DRR'])||0,
+              spend: parseFloat(item['Ad Spend'])||0, 
+              orders: parseInt(item['Orders'])||0, 
+              returns: parseInt(item['Returns'])||0,
+              impr: parseInt(item['Impressions']) || 0,
+              clicks: parseInt(item['Clicks']) || 0,
+              ads_active: !!item['Ads Active'],
+              rating: parseFloat(item['Rating']) || 0, 
+              reviews: parseInt(item['Reviews']) || 0,
+              type: 'B2C',
+              stock_unalloc: 0, stock_factory:0, stock_wip:0
+          }));
+          const processed = mapped.map(d => ({
+              ...d,
+              drr: (d.drr_kol||0) + (d.drr_pith||0) + (d.drr_har||0) + (d.drr_blr||0)
+          }));
+          setDisplayData(processed as InventoryItem[]);
+      } else if (type === 'growth' || type === 'daily') {
+          const labels = Object.keys(jsonData[0]).slice(1);
+          const matrixData: MatrixData = {};
+          jsonData.forEach(row => {
+              const metric = row.Metric;
+              if (!metric) return;
+              const values = labels.map(label => parseFloat(row[label]) || 0);
+              if (!matrixData[metric]) {
+                  matrixData[metric] = {
+                      name: metric,
+                      gmv: [], units: [], packets: [], spend: [], asp: [], tacos: [], share: [],
+                  };
+              }
+              // This is a simplification; you might need a more robust mapping
+              if (metric.toLowerCase().includes('gmv')) matrixData[metric].gmv = values;
+              else if (metric.toLowerCase().includes('units')) matrixData[metric].units = values;
+              else if (metric.toLowerCase().includes('spend')) matrixData[metric].spend = values;
+              else if (metric.toLowerCase().includes('asp')) matrixData[metric].asp = values;
+          });
+
+          if (type === 'growth') {
+              setGrowthData(matrixData);
+              setGrowthLabels(labels);
+          } else { // daily
+              setDailyData(matrixData);
+              setDailyLabels(labels);
+          }
+      }
+      
+      toast({ title: "Import Successful", description: `${type.charAt(0).toUpperCase() + type.slice(1)} data has been loaded.` });
+    } catch (error) {
+      console.error("File processing error:", error);
+      toast({
+        variant: "destructive",
+        title: "Import Failed",
+        description: "Could not process the uploaded file.",
+      });
+    }
+  };
   
   const handleFileUpload = (
     event: React.ChangeEvent<HTMLInputElement>,
@@ -132,86 +210,54 @@ export default function MainView() {
 
     const reader = new FileReader();
     reader.onload = (e) => {
-      try {
-        const data = new Uint8Array(e.target?.result as ArrayBuffer);
-        const workbook = XLSX.read(data, { type: "array" });
-        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-        const jsonData = XLSX.utils.sheet_to_json<any>(worksheet);
-
-        if (type === 'inventory') {
-            const mapped = jsonData.map((item, idx) => ({ 
-                id: item.id || Date.now() + idx, 
-                name: item['SKU Name'] || 'Unnamed SKU',
-                channel: item['Channel'] || 'General',
-                price: parseFloat(item['Price'])||0, 
-                shipping: parseFloat(item['Shipping'])||0, 
-                commission: parseFloat(item['Commission'])||0,
-                stock_kol: parseInt(item['Kol Stock'])||0, 
-                drr_kol: parseInt(item['Kol DRR'])||0,
-                stock_pith: parseInt(item['Pith Stock'])||0,
-                drr_pith: parseInt(item['Pith DRR'])||0,
-                stock_har: parseInt(item['Har Stock'])||0,
-                drr_har: parseInt(item['Har DRR'])||0,
-                stock_blr: parseInt(item['Blr Stock'])||0,
-                drr_blr: parseInt(item['Blr DRR'])||0,
-                spend: parseFloat(item['Ad Spend'])||0, 
-                orders: parseInt(item['Orders'])||0, 
-                returns: parseInt(item['Returns'])||0,
-                impr: parseInt(item['Impressions']) || 0,
-                clicks: parseInt(item['Clicks']) || 0,
-                ads_active: !!item['Ads Active'],
-                rating: parseFloat(item['Rating']) || 0, 
-                reviews: parseInt(item['Reviews']) || 0,
-                type: 'B2C',
-                stock_unalloc: 0, stock_factory:0, stock_wip:0
-            }));
-            const processed = mapped.map(d => ({
-                ...d,
-                drr: (d.drr_kol||0) + (d.drr_pith||0) + (d.drr_har||0) + (d.drr_blr||0)
-            }));
-            setDisplayData(processed as InventoryItem[]);
-        } else if (type === 'growth' || type === 'daily') {
-            const labels = Object.keys(jsonData[0]).slice(1);
-            const matrixData: MatrixData = {};
-            jsonData.forEach(row => {
-                const metric = row.Metric;
-                const values = labels.map(label => parseFloat(row[label]) || 0);
-                if (!matrixData[metric]) {
-                    matrixData[metric] = {
-                        name: metric,
-                        gmv: [], units: [], packets: [], spend: [], asp: [], tacos: [], share: [],
-                    };
-                }
-                // This is a simplification; you might need a more robust mapping
-                if (metric.toLowerCase().includes('gmv')) matrixData[metric].gmv = values;
-                else if (metric.toLowerCase().includes('units')) matrixData[metric].units = values;
-                else if (metric.toLowerCase().includes('spend')) matrixData[metric].spend = values;
-                else if (metric.toLowerCase().includes('asp')) matrixData[metric].asp = values;
-            });
-
-            if (type === 'growth') {
-                setGrowthData(matrixData);
-                setGrowthLabels(labels);
-            } else { // daily
-                setDailyData(matrixData);
-                setDailyLabels(labels);
-            }
-        }
-        
-        toast({ title: "Import Successful", description: `${type.charAt(0).toUpperCase() + type.slice(1)} data has been loaded.` });
-      } catch (error) {
-        console.error("File processing error:", error);
-        toast({
-          variant: "destructive",
-          title: "Import Failed",
-          description: "Could not process the uploaded file.",
-        });
-      }
+      const data = e.target?.result as ArrayBuffer;
+      processSheetData(data, type);
     };
     reader.readAsArrayBuffer(file);
     if(event.target) event.target.value = '';
   };
   
+  const handleCloudSync = async (url: string, type: TabId | null) => {
+    if (!type) {
+        toast({ variant: 'destructive', title: "Sync Error", description: "No data type specified for sync."});
+        return;
+    }
+
+    toast({ title: "Sync Initiated", description: `Fetching data from Google Sheets...` });
+    try {
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error(`Failed to fetch: ${response.statusText}`);
+        }
+        const data = await response.arrayBuffer();
+        
+        let dataType: 'inventory' | 'growth' | 'daily' | null = null;
+        if (type === 'daily' || type === 'inventory') {
+            dataType = 'inventory';
+        } else if (type === 'growth') {
+            dataType = 'growth';
+        } else if (type === 'dailypnl') {
+            dataType = 'daily';
+        }
+
+        if (dataType) {
+            processSheetData(data, dataType);
+        } else {
+            throw new Error("Invalid data type for cloud sync.");
+        }
+
+    } catch (error) {
+        console.error("Cloud sync error:", error);
+        const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
+        toast({ variant: 'destructive', title: "Sync Failed", description: `Could not fetch or process data from URL. ${errorMessage}`});
+    }
+  };
+
+  const openCloudImport = (type: TabId) => {
+    setPendingCloudType(type);
+    setModalOpen(true);
+  };
+
   const handleRecalculate = useCallback(async () => {
     setRecsLoading(true);
     const input: InventoryRecommendationsInput = {
@@ -285,6 +331,7 @@ export default function MainView() {
                 setSearchTerm={setSearchTerm}
                 onAddSku={() => setAddSkuModalOpen(true)}
                 onFileUpload={(e) => handleFileUpload(e, 'inventory')}
+                onCloudImport={() => openCloudImport('daily')}
             />
         </TabsContent>
         <TabsContent value="inventory">
@@ -295,6 +342,7 @@ export default function MainView() {
                 data={growthData} 
                 labels={growthLabels}
                 onFileUpload={(e) => handleFileUpload(e, 'growth')} 
+                onCloudImport={() => openCloudImport('growth')}
              />
         </TabsContent>
         <TabsContent value="dailypnl">
@@ -302,6 +350,7 @@ export default function MainView() {
                 data={dailyData} 
                 labels={dailyLabels}
                 onFileUpload={(e) => handleFileUpload(e, 'daily')}
+                onCloudImport={() => openCloudImport('dailypnl')}
              />
         </TabsContent>
         <TabsContent value="recommendations">
@@ -318,11 +367,7 @@ export default function MainView() {
       <CloudImportModal
         isOpen={isModalOpen}
         onClose={() => setModalOpen(false)}
-        onSync={(url) => {
-          // Placeholder for fetch logic
-          console.log(`Syncing ${pendingCloudType} from ${url}`);
-          toast({title: "Sync Initiated", description: `Fetching data from Google Sheets.`});
-        }}
+        onSync={(url) => handleCloudSync(url, pendingCloudType)}
         type={pendingCloudType}
       />
       
@@ -348,5 +393,7 @@ export default function MainView() {
     </>
   );
 }
+
+    
 
     

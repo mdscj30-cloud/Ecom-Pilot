@@ -1,3 +1,4 @@
+
 "use client";
 
 import React from "react";
@@ -18,6 +19,7 @@ import {
   Upload,
   Plus,
   Trash2,
+  Cloud,
 } from "lucide-react";
 import {
   Tooltip,
@@ -37,6 +39,7 @@ interface DailyOpsTabProps {
   setSearchTerm: (term: string) => void;
   onAddSku: () => void;
   onFileUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  onCloudImport: () => void;
 }
 
 const channels: Channel[] = ["All", "Meesho", "Amazon"];
@@ -51,7 +54,8 @@ export default function DailyOpsTab({
   searchTerm,
   setSearchTerm,
   onAddSku,
-  onFileUpload
+  onFileUpload,
+  onCloudImport
 }: DailyOpsTabProps) {
     
   const getDecision = (item: InventoryItem) => {
@@ -96,6 +100,12 @@ export default function DailyOpsTab({
                         <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => document.getElementById('inventory-upload')?.click()}><Upload className="h-4 w-4" /></Button>
                     </TooltipTrigger>
                     <TooltipContent><p>Import from .xlsx</p></TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <Button variant="outline" size="icon" className="h-9 w-9" onClick={onCloudImport}><Cloud className="h-4 w-4" /></Button>
+                    </TooltipTrigger>
+                    <TooltipContent><p>Import from Google Sheet</p></TooltipContent>
                 </Tooltip>
              </TooltipProvider>
              <input type="file" id="inventory-upload" className="hidden" accept=".xlsx, .xls" onChange={onFileUpload}/>
@@ -155,5 +165,7 @@ export default function DailyOpsTab({
     </div>
   );
 }
+
+    
 
     

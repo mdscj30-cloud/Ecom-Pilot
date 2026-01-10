@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from '@/components/ui/button';
-import { BarChart2, Upload } from "lucide-react";
+import { BarChart2, Upload, Cloud } from "lucide-react";
 import React, { useMemo, useState } from 'react';
 import type { MatrixData } from '@/lib/types';
 import {
@@ -17,11 +17,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Tooltip as UiTooltip, TooltipContent as UiTooltipContent, TooltipProvider } from '@/components/ui/tooltip';
 
 interface GrowthTabProps {
   data: MatrixData | null;
   labels: string[];
   onFileUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  onCloudImport: () => void;
 }
 
 const chartConfig = {
@@ -30,7 +32,7 @@ const chartConfig = {
   roas: { label: "ROAS", color: "hsl(var(--chart-3))" },
 };
 
-export default function GrowthTab({ data, labels, onFileUpload }: GrowthTabProps) {
+export default function GrowthTab({ data, labels, onFileUpload, onCloudImport }: GrowthTabProps) {
   const [chartView, setChartView] = useState('gmv_vs_spend');
   
   const chartData = useMemo(() => {
@@ -57,10 +59,16 @@ export default function GrowthTab({ data, labels, onFileUpload }: GrowthTabProps
               <BarChart2 className="w-5 h-5 text-primary" />
               Growth Analysis
             </div>
-            <Button size="sm" variant="outline" onClick={() => document.getElementById('growth-upload')?.click()}>
-                <Upload className="w-4 h-4 mr-2" />
-                Import Growth Data
-            </Button>
+            <div className='flex items-center gap-2'>
+                <Button size="sm" variant="outline" onClick={() => document.getElementById('growth-upload')?.click()}>
+                    <Upload className="w-4 h-4 mr-2" />
+                    Import from File
+                </Button>
+                <Button size="sm" variant="outline" onClick={onCloudImport}>
+                    <Cloud className="w-4 h-4 mr-2" />
+                    Import from Sheet
+                </Button>
+            </div>
             <input type="file" id="growth-upload" className="hidden" accept=".xlsx, .xls" onChange={onFileUpload}/>
           </CardTitle>
           <CardDescription>
@@ -129,9 +137,24 @@ export default function GrowthTab({ data, labels, onFileUpload }: GrowthTabProps
                       <SelectItem value="roas">ROAS Trend</SelectItem>
                   </SelectContent>
               </Select>
-              <Button size="sm" variant="outline" onClick={() => document.getElementById('growth-upload')?.click()}>
-                  <Upload className="w-4 h-4" />
-              </Button>
+              <TooltipProvider>
+                <UiTooltip>
+                  <UiTooltipContent>Import from file</UiTooltipContent>
+                  <UiTooltipTrigger asChild>
+                    <Button size="icon" variant="outline" className='h-9 w-9' onClick={() => document.getElementById('growth-upload')?.click()}>
+                        <Upload className="w-4 h-4" />
+                    </Button>
+                  </UiTooltipTrigger>
+                </UiTooltip>
+                <UiTooltip>
+                    <UiTooltipContent>Import from Google Sheet</UiTooltipContent>
+                    <UiTooltipTrigger asChild>
+                        <Button size="icon" variant="outline" className='h-9 w-9' onClick={onCloudImport}>
+                            <Cloud className="w-4 h-4" />
+                        </Button>
+                    </UiTooltipTrigger>
+                </UiTooltip>
+              </TooltipProvider>
               <input type="file" id="growth-upload" className="hidden" accept=".xlsx, .xls" onChange={onFileUpload}/>
             </div>
           </div>
@@ -176,3 +199,6 @@ export default function GrowthTab({ data, labels, onFileUpload }: GrowthTabProps
     </div>
   );
 }
+
+
+    

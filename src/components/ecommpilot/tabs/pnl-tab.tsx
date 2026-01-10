@@ -1,10 +1,11 @@
+
 "use client";
 
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend, Area, ComposedChart } from 'recharts';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { Button } from '@/components/ui/button';
-import { Calendar, Upload } from "lucide-react";
+import { Calendar, Upload, Cloud } from "lucide-react";
 import React, { useMemo } from 'react';
 import type { MatrixData } from '@/lib/types';
 import {
@@ -15,11 +16,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+
 
 interface PnlTabProps {
   data: MatrixData | null;
   labels: string[];
   onFileUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  onCloudImport: () => void;
 }
 
 const chartConfig = {
@@ -28,7 +32,7 @@ const chartConfig = {
   profit: { label: "Net Profit", color: "hsl(var(--chart-4))" },
 };
 
-export default function PnlTab({ data, labels, onFileUpload }: PnlTabProps) {
+export default function PnlTab({ data, labels, onFileUpload, onCloudImport }: PnlTabProps) {
   
   const chartData = useMemo(() => {
     if (!data || labels.length === 0) return [];
@@ -58,10 +62,16 @@ export default function PnlTab({ data, labels, onFileUpload }: PnlTabProps) {
                 <Calendar className="w-5 h-5 text-amber-600" />
                 Daily P&L
             </div>
-            <Button size="sm" variant="outline" onClick={() => document.getElementById('daily-upload')?.click()}>
-                <Upload className="w-4 h-4 mr-2" />
-                Import Daily Data
-            </Button>
+            <div className="flex items-center gap-2">
+                <Button size="sm" variant="outline" onClick={() => document.getElementById('daily-upload')?.click()}>
+                    <Upload className="w-4 h-4 mr-2" />
+                    Import from File
+                </Button>
+                <Button size="sm" variant="outline" onClick={onCloudImport}>
+                    <Cloud className="w-4 h-4 mr-2" />
+                    Import from Sheet
+                </Button>
+            </div>
             <input type="file" id="daily-upload" className="hidden" accept=".xlsx, .xls" onChange={onFileUpload}/>
           </CardTitle>
           <CardDescription>
@@ -89,9 +99,24 @@ export default function PnlTab({ data, labels, onFileUpload }: PnlTabProps) {
                         Daily breakdown of revenue, costs, and profit.
                     </CardDescription>
                 </div>
-                 <Button size="sm" variant="outline" onClick={() => document.getElementById('daily-upload')?.click()}>
-                    <Upload className="w-4 h-4" />
-                </Button>
+                <TooltipProvider>
+                    <Tooltip>
+                        <TooltipContent>Import from file</TooltipContent>
+                        <TooltipTrigger asChild>
+                            <Button size="icon" variant="outline" className="h-9 w-9" onClick={() => document.getElementById('daily-upload')?.click()}>
+                                <Upload className="w-4 h-4" />
+                            </Button>
+                        </TooltipTrigger>
+                    </Tooltip>
+                    <Tooltip>
+                        <TooltipContent>Import from Google Sheet</TooltipContent>
+                        <TooltipTrigger asChild>
+                            <Button size="icon" variant="outline" className="h-9 w-9" onClick={onCloudImport}>
+                                <Cloud className="w-4 h-4" />
+                            </Button>
+                        </TooltipTrigger>
+                    </Tooltip>
+                </TooltipProvider>
                 <input type="file" id="daily-upload" className="hidden" accept=".xlsx, .xls" onChange={onFileUpload}/>
             </div>
         </CardHeader>
@@ -147,5 +172,7 @@ export default function PnlTab({ data, labels, onFileUpload }: PnlTabProps) {
     </div>
   );
 }
+
+    
 
     
