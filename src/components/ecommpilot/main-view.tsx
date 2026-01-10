@@ -8,6 +8,7 @@ import {
   Box,
   Calendar,
   CheckCircle,
+  TrendingUp,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type {
@@ -17,9 +18,11 @@ import type {
   SortConfig,
   Channel,
   ProcessedSheetData,
-  Recommendation
+  Recommendation,
+  GrowthData
 } from "@/lib/types";
 import { masterData } from "@/lib/data";
+import { growthMasterData } from "@/lib/growth-data";
 
 import { format, parse, isValid } from 'date-fns';
 
@@ -30,12 +33,14 @@ import DailyOpsTab from "./tabs/daily-ops-tab";
 import InventoryTab from "./tabs/inventory-tab";
 import PnlTab from "./tabs/pnl-tab";
 import RecommendationsTab from "./tabs/recommendations-tab";
+import GrowthTab from "./tabs/growth-tab";
 import { CloudImportModal, AddSkuModal } from "./modals";
 
 const channelIcons = {
   daily: Activity,
   inventory: Box,
   dailypnl: Calendar,
+  growth: TrendingUp,
   recommendations: CheckCircle,
 };
 
@@ -47,6 +52,7 @@ export default function MainView() {
   const [displayData, setDisplayData] = useState<InventoryItem[]>([]);
   const [filteredData, setFilteredData] = useState<InventoryItem[]>([]);
   const [dailyData, setDailyData] = useState<ProcessedSheetData[] | null>(null);
+  const [growthData, setGrowthData] = useState<GrowthData[] | null>(null);
 
   // Filters & Thresholds
   const [currentChannel, setCurrentChannel] = useState<Channel>("All");
@@ -70,6 +76,7 @@ export default function MainView() {
   const initializeData = useCallback(() => {
     setDisplayData(masterData);
     setDailyData(null);
+    setGrowthData(null);
   }, []);
 
   const handleReset = () => {
@@ -125,7 +132,7 @@ export default function MainView() {
   // === DATA PROCESSING & IMPORT ===
   const processSheetData = (
     data: ArrayBuffer,
-    type: 'inventory' | 'daily'
+    type: 'inventory' | 'daily' | 'growth'
   ) => {
     try {
       const workbook = XLSX.read(data, { type: "array" });
@@ -172,100 +179,123 @@ export default function MainView() {
             };
           });
           setDisplayData(importedData);
-      } else { // daily
-          const header1: string[] = json[0] || [];
-          const header2: string[] = json[1] || [];
-          
-          const platformHeaders: { name: string, startIndex: number, endIndex: number }[] = [];
-          let currentPlatform: string | null = null;
-          let currentPlatformIndex = -1;
-
-          header1.forEach((cell, index) => {
-              if (cell && cell.trim() !== '') {
-                  if (currentPlatform) {
-                      platformHeaders.push({ name: currentPlatform, startIndex: currentPlatformIndex, endIndex: index - 1 });
-                  }
-                  const platformNameMatch = cell.match(/(\d+\s*of\s*\d+:\s*)?(.*)/);
-                  currentPlatform = platformNameMatch ? platformNameMatch[2].trim() : cell.trim();
-                  currentPlatformIndex = index;
-              }
-          });
-          if (currentPlatform) {
-              platformHeaders.push({ name: currentPlatform, startIndex: currentPlatformIndex, endIndex: header1.length - 1 });
-          }
-          
-          const processedData: ProcessedSheetData[] = [];
-          
-          json.slice(2).forEach(row => {
-              const dateString = row[0];
-              if (!dateString) return;
-
-              let date: Date | null = null;
-              if (typeof dateString === 'number') {
-                  // Handle Excel serial date
-                  date = new Date(Date.UTC(1900, 0, dateString - 1));
-              } else if (typeof dateString === 'string') {
-                  const formatsToTry = [
-                      "MMM'yy",
-                      'MM/dd/yyyy',
-                      'yyyy-MM-dd',
-                      'dd-MM-yyyy',
-                      'MMM d, yyyy'
-                  ];
-                  for (const fmt of formatsToTry) {
-                      const parsedDate = parse(dateString, fmt, new Date());
-                      if (isValid(parsedDate)) {
-                          date = parsedDate;
-                          break;
-                      }
-                  }
-              }
-              if (!date) return;
-
-              platformHeaders.forEach(platform => {
-                   if (platform.name.toLowerCase().includes('total')) return;
-
-                   let gmv = 0, units = 0, packets = 0, adsSpent = 0;
-
-                   for (let i = platform.startIndex; i <= platform.endIndex; i++) {
-                       const metric = header2[i]?.toLowerCase() || '';
-                       const value = typeof row[i] === 'string' ? parseFloat(row[i].replace(/[^0-9.-]+/g,"")) : row[i];
-                       if (isNaN(value)) continue;
-
-                       if (metric.includes('gmv')) gmv = value;
-                       else if (metric.includes('units')) units = value;
-                       else if (metric.includes('packets')) packets = value;
-                       else if (metric.includes('ads spent')) adsSpent = value;
-                   }
-                  
-                   if (gmv > 0 || units > 0 || packets > 0 || adsSpent > 0) {
-                        const avgAsp = units > 0 ? gmv / units : 0;
-                        const tacos = gmv > 0 ? adsSpent / gmv : 0;
-                       
-                        processedData.push({
-                          date: date as Date,
-                          channel: platform.name,
-                          gmv,
-                          units,
-                          packets,
-                          adsSpent,
-                          avgAsp,
-                          tacos,
-                          month: format(date as Date, 'MMM'),
-                          year: format(date as Date, 'yyyy'),
-                          day: format(date as Date, 'd'),
-                          revenuePerUnit: units > 0 ? gmv / units : 0,
-                          adsPerUnit: units > 0 ? adsSpent / units : 0,
-                      });
-                   }
-               });
-           });
+      } else if (type === 'daily' || type === 'growth') {
+            const header1: string[] = json[0] || [];
+            const header2: string[] = json[1] || [];
             
-            if (processedData.length === 0) {
-                 throw new Error("No valid data was parsed from the sheet. Check the format and headers.");
+            const platformHeaders: { name: string, startIndex: number, endIndex: number }[] = [];
+            let currentPlatform: string | null = null;
+            let currentPlatformIndex = -1;
+
+            header1.forEach((cell, index) => {
+                if (cell && cell.trim() !== '') {
+                    if (currentPlatform) {
+                        platformHeaders.push({ name: currentPlatform, startIndex: currentPlatformIndex, endIndex: index - 1 });
+                    }
+                    const platformNameMatch = cell.match(/(\d+\s*of\s*\d+:\s*)?(.*)/);
+                    currentPlatform = platformNameMatch ? platformNameMatch[2].trim() : cell.trim();
+                    currentPlatformIndex = index;
+                }
+            });
+            if (currentPlatform) {
+                platformHeaders.push({ name: currentPlatform, startIndex: currentPlatformIndex, endIndex: header1.length - 1 });
             }
             
-            setDailyData(processedData);
+            if (type === 'daily') {
+              const processedData: ProcessedSheetData[] = [];
+              json.slice(2).forEach(row => {
+                  const dateString = row[0];
+                  if (!dateString) return;
+
+                  let date: Date | null = null;
+                  if (typeof dateString === 'number') {
+                      date = new Date(Date.UTC(1900, 0, dateString - 1));
+                  } else if (typeof dateString === 'string') {
+                      const formatsToTry = [ "MMM'yy", 'MM/dd/yyyy', 'yyyy-MM-dd', 'dd-MM-yyyy', 'MMM d, yyyy' ];
+                      for (const fmt of formatsToTry) {
+                          const parsedDate = parse(dateString, fmt, new Date());
+                          if (isValid(parsedDate)) {
+                              date = parsedDate;
+                              break;
+                          }
+                      }
+                  }
+                  if (!date) return;
+
+                  platformHeaders.forEach(platform => {
+                      if (platform.name.toLowerCase().includes('total')) return;
+
+                      let gmv = 0, units = 0, packets = 0, adsSpent = 0;
+                      for (let i = platform.startIndex; i <= platform.endIndex; i++) {
+                          const metric = header2[i]?.toLowerCase() || '';
+                          const value = typeof row[i] === 'string' ? parseFloat(row[i].replace(/[^0-9.-]+/g,"")) : row[i];
+                          if (isNaN(value)) continue;
+
+                          if (metric.includes('gmv')) gmv = value;
+                          else if (metric.includes('units')) units = value;
+                          else if (metric.includes('packets')) packets = value;
+                          else if (metric.includes('ads spent')) adsSpent = value;
+                      }
+                    
+                      if (gmv > 0 || units > 0 || packets > 0 || adsSpent > 0) {
+                            const avgAsp = units > 0 ? gmv / units : 0;
+                            const tacos = gmv > 0 ? adsSpent / gmv : 0;
+                          
+                            processedData.push({
+                              date: date as Date,
+                              channel: platform.name,
+                              gmv, units, packets, adsSpent, avgAsp, tacos,
+                              month: format(date as Date, 'MMM'),
+                              year: format(date as Date, 'yyyy'),
+                              day: format(date as Date, 'd'),
+                              revenuePerUnit: units > 0 ? gmv / units : 0,
+                              adsPerUnit: units > 0 ? adsSpent / units : 0,
+                          });
+                      }
+                  });
+              });
+              if (processedData.length === 0) {
+                  throw new Error("No valid data was parsed from the sheet. Check the format and headers.");
+              }
+              setDailyData(processedData);
+            } else { // growth
+              const processedData: GrowthData[] = [];
+              json.slice(2).forEach(row => {
+                  const monthString = row[0];
+                  if (!monthString) return;
+
+                  platformHeaders.forEach(platform => {
+                      if (platform.name.toLowerCase().includes('total')) return;
+                      let gmv = 0, units = 0, packets = 0, adsSpent = 0, mom = 0, channelShare = 0;
+
+                      for (let i = platform.startIndex; i <= platform.endIndex; i++) {
+                          const metric = header2[i]?.toLowerCase() || '';
+                          const value = typeof row[i] === 'string' ? parseFloat(row[i].replace(/[^0-9.%-]+/g,"")) : row[i];
+                           if (isNaN(value)) continue;
+
+                          if (metric.includes('gmv')) gmv = value;
+                          else if (metric.includes('units')) units = value;
+                          else if (metric.includes('packets')) packets = value;
+                          else if (metric.includes('ads spent')) adsSpent = value;
+                          else if (metric.includes('mom')) mom = value;
+                          else if (metric.includes('channel share')) channelShare = value;
+                      }
+                      if (gmv > 0 || units > 0 || packets > 0 || adsSpent > 0) {
+                          const avgAsp = units > 0 ? gmv / units : 0;
+                          const tacos = gmv > 0 ? adsSpent / gmv : 0;
+                          processedData.push({
+                              month: monthString,
+                              channel: platform.name,
+                              gmv, units, packets, adsSpent, avgAsp, tacos, mom, channelShare
+                          });
+                      }
+                  });
+              });
+              if (processedData.length === 0) {
+                  throw new Error("No valid data was parsed from the sheet. Check the format and headers.");
+              }
+              setGrowthData(processedData);
+            }
         }
       
       toast({ title: "Import Successful", description: `${type.charAt(0).toUpperCase() + type.slice(1)} data has been loaded.` });
@@ -281,7 +311,7 @@ export default function MainView() {
 
   const handleFileUpload = (
     event: React.ChangeEvent<HTMLInputElement>,
-    type: 'inventory' | 'daily'
+    type: 'inventory' | 'daily' | 'growth'
   ) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -313,13 +343,15 @@ export default function MainView() {
         }
         const data = await response.arrayBuffer();
         
-        let dataType: 'inventory' | 'daily' | null = null;
+        let dataType: 'inventory' | 'daily' | 'growth' | null = null;
         if (type === 'daily') { // Maps to inventory sheet on Daily Ops tab
             dataType = 'inventory';
         } else if (type === 'dailypnl') {
             dataType = 'daily';
         } else if (type === 'inventory') { // From inventory tab
              dataType = 'inventory';
+        } else if (type === 'growth') {
+             dataType = 'growth';
         }
 
         if (dataType) {
@@ -403,6 +435,13 @@ export default function MainView() {
                     data={dailyData}
                     onFileUpload={(e) => handleFileUpload(e, 'daily')}
                     onCloudImport={() => openCloudImport('dailypnl')}
+                 />
+        </TabsContent>
+         <TabsContent value="growth">
+                <GrowthTab
+                    data={growthData}
+                    onFileUpload={(e) => handleFileUpload(e, 'growth')}
+                    onCloudImport={() => openCloudImport('growth')}
                  />
         </TabsContent>
         <TabsContent value="recommendations">

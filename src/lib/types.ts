@@ -84,7 +84,7 @@ export interface MatrixData {
   };
 }
 
-export type TabId = 'daily' | 'inventory' | 'dailypnl' | 'recommendations';
+export type TabId = 'daily' | 'inventory' | 'dailypnl' | 'recommendations' | 'growth';
 
 export type SortConfig = {
     column: string | null;
@@ -92,3 +92,16 @@ export type SortConfig = {
 };
 
 export type Channel = 'All' | 'Meesho' | 'Amazon';
+
+export interface GrowthData {
+    month: string;
+    channel: string;
+    gmv: number;
+    units: number;
+    packets: number;
+    adsSpent: number;
+    avgAsp: number;
+    tacos: number;
+    mom: number;
+    channelShare: number;
+}
