@@ -353,15 +353,20 @@ export default function MainView() {
   const handleRecalculate = useCallback(async () => {
     setRecsLoading(true);
     const input: InventoryRecommendationsInput = {
-        inventoryItems: displayData.map(item => ({
-            sku: item.name,
-            channel: item.channel,
-            stockLevel: (item.stock_kol || 0) + (item.stock_pith || 0) + (item.stock_har || 0) + (item.stock_blr || 0),
-            drr: item.drr,
-            price: item.price,
-            shipping: item.shipping,
-            commission: item.commission,
-        })),
+        inventoryItems: displayData.map(item => {
+            const revenue = item.price * item.orders;
+            const roas = item.spend > 0 ? revenue / item.spend : 0;
+            return {
+                sku: item.name,
+                channel: item.channel,
+                stockLevel: (item.stock_kol || 0) + (item.stock_pith || 0) + (item.stock_har || 0) + (item.stock_blr || 0),
+                drr: item.drr,
+                price: item.price,
+                shipping: item.shipping,
+                commission: item.commission,
+                roas: roas,
+            };
+        }),
         targetRoas: recTargetRoas,
     };
 
@@ -405,7 +410,7 @@ export default function MainView() {
             return (
               <TabsTrigger key={tab} value={tab} className="capitalize flex items-center gap-2 whitespace-nowrap data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md">
                 <Icon className="w-4 h-4" />
-                {tab === 'daily' ? 'Daily Ops' : tab === 'dailypnl' ? 'Daily P&L' : tab === 'recommendations' ? 'Actions' : tab}
+                {tab === 'daily' ? 'Daily Ops' : tab === 'dailypnl' ? 'Daily P&L' : tab === 'recommendations' ? 'Action Center' : tab}
               </TabsTrigger>
             )
           })}
@@ -451,6 +456,7 @@ export default function MainView() {
         <TabsContent value="recommendations">
             <RecommendationsTab 
                 recommendations={recommendations}
+                inventoryData={displayData}
                 isLoading={isRecsLoading}
                 targetRoas={recTargetRoas}
                 setTargetRoas={setRecTargetRoas}

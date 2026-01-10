@@ -1,6 +1,6 @@
 'use server';
 /**
- * @fileOverview This file defines a Genkit flow for generating inventory recommendations.
+ * @fileOverview This file defines a Genkit flow for generating inventory and advertising recommendations.
  *
  * It takes into account current stock levels, DRR (Daily Run Rate), and a target ROAS to provide actionable insights.
  * - generateInventoryRecommendations - The main function to trigger the inventory recommendation flow.
@@ -19,6 +19,7 @@ const InventoryItemSchema = z.object({
   price: z.number().describe('The price of the item.'),
   shipping: z.number().describe('The shipping cost of the item.'),
   commission: z.number().describe('The commission fee for the item.'),
+  roas: z.number().describe('The current Return on Ad Spend for the item.'),
 });
 
 const InventoryRecommendationsInputSchema = z.object({
@@ -29,8 +30,9 @@ export type InventoryRecommendationsInput = z.infer<typeof InventoryRecommendati
 
 const RecommendationSchema = z.object({
   sku: z.string().describe('The stock keeping unit identifier.'),
-  recommendation: z.string().describe('The AI-generated recommendation (e.g., Restock, Reduce).'),
-  reason: z.string().describe('The reason for the recommendation.'),
+  inventoryAction: z.string().describe('The recommendation for inventory (e.g., Restock, Reduce, OK).'),
+  adAction: z.string().describe('The recommendation for advertising (e.g., Increase Spend, Pause Ads, Monitor).'),
+  remarks: z.string().describe('A consolidated remark explaining the reasoning for the actions.'),
 });
 
 const InventoryRecommendationsOutputSchema = z.array(RecommendationSchema);
@@ -46,27 +48,30 @@ const inventoryRecommendationsPrompt = ai.definePrompt({
   name: 'inventoryRecommendationsPrompt',
   input: {schema: InventoryRecommendationsInputSchema},
   output: {schema: InventoryRecommendationsOutputSchema},
-  prompt: `You are an AI assistant specializing in providing inventory recommendations for e-commerce businesses.
+  prompt: `You are an AI assistant specializing in providing inventory and advertising recommendations for e-commerce businesses.
 
-  Based on the provided inventory data, DRR (Daily Run Rate), and target ROAS, provide a recommendation for each SKU.
+  Based on the provided inventory data, DRR (Daily Run Rate), current ROAS, and target ROAS, provide a recommendation for each SKU.
+  Your recommendations should focus on optimizing inventory levels, ad spend, and overall profitability.
 
-  Your recommendations should focus on optimizing inventory levels and improving profitability.
-
-  Consider the following factors when generating recommendations:
-  - Stock levels: Are they sufficient to meet demand?
-  - DRR: How quickly are products selling?
-  - Target ROAS: Are ad campaigns performing well?
+  For each SKU, provide:
+  1.  **inventoryAction**: Should be one of "Restock", "Reduce", or "OK".
+      - "Restock": If stock cover (stockLevel / DRR) is less than 7 days.
+      - "Reduce": If stock cover is more than 60 days.
+      - "OK": Otherwise.
+  2.  **adAction**: Should be one of "Increase Spend", "Pause Ads", or "Monitor".
+      - "Pause Ads": If stock cover is critically low (less than 3 days).
+      - "Increase Spend": If the current ROAS is significantly above the target ROAS and stock cover is healthy (> 15 days).
+      - "Monitor": For all other cases, including when ROAS is below target or stock is moderate.
+  3.  **remarks**: A brief, consolidated reason for both actions. Mention key metrics like stock days and ROAS performance.
 
   Here's the inventory data:
   {{#each inventoryItems}}
-  - SKU: {{sku}}, Channel: {{channel}}, Stock: {{stockLevel}}, DRR: {{drr}}, Price: {{price}}, Shipping: {{shipping}}, Commission: {{commission}}
+  - SKU: {{sku}}, Channel: {{channel}}, Stock: {{stockLevel}}, DRR: {{drr}}, Price: {{price}}, Shipping: {{shipping}}, Commission: {{commission}}, ROAS: {{roas}}
   {{/each}}
 
   Target ROAS: {{targetRoas}}
 
-  Provide a recommendation and a brief reason for each SKU. The recommendation should be one of the following: "Restock", "Reduce", or "OK".
-  The output should be a JSON array of objects, each object containing the sku, recommendation and reason.
-  Ensure you generate valid and parseable JSON.
+  Provide the output as a valid JSON array of objects.
   `,
 });
 
