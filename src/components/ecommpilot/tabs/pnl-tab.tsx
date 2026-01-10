@@ -1,7 +1,7 @@
 
 "use client";
 
-import { Line, ComposedChart, XAxis, YAxis, CartesianGrid, Legend, Tooltip, Bar } from 'recharts';
+import { Line, ComposedChart, XAxis, YAxis, CartesianGrid, Legend, Tooltip, Bar, PieChart, Pie, Cell, BarChart } from 'recharts';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
 import { Button } from '@/components/ui/button';
@@ -19,7 +19,7 @@ import {
 import { Tooltip as UiTooltip, TooltipContent as UiTooltipContent, TooltipProvider, TooltipTrigger as UiTooltipTrigger } from '@/components/ui/tooltip';
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { format, subDays, startOfToday, endOfToday, addDays } from 'date-fns';
+import { format, startOfToday, endOfToday } from 'date-fns';
 import KpiCard from '../kpi-card';
 import { cn } from '@/lib/utils';
 import { DateRange } from 'react-day-picker';
@@ -36,17 +36,25 @@ const chartConfig = {
   tacos: { label: "TACOS", color: "hsl(var(--chart-3))" },
 };
 
+const COLORS = ["hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))"];
+
+
 type SortKey = 'date' | 'gmv' | 'adsSpent' | 'tacos' | 'units' | 'avgAsp';
+type ChannelSortKey = 'channel' | 'gmv' | 'adsSpent' | 'tacos' | 'units';
 
 export default function PnlTab({ data, onFileUpload, onCloudImport }: PnlTabProps) {
 
-  const defaultDateRange = {
-    from: data && data.length > 0 ? data.reduce((min, p) => p.date < min ? p.date : min, data[0].date) : startOfToday(),
-    to: data && data.length > 0 ? data.reduce((max, p) => p.date > max ? p.date : max, data[0].date) : endOfToday(),
-  }
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
+     if (data && data.length > 0) {
+        const minDate = data.reduce((min, p) => p.date < min ? p.date : min, data[0].date);
+        const maxDate = data.reduce((max, p) => p.date > max ? p.date : max, data[0].date);
+        return { from: minDate, to: maxDate };
+    }
+    return { from: startOfToday(), to: endOfToday() };
+  });
 
-  const [dateRange, setDateRange] = useState<DateRange | undefined>(defaultDateRange);
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' });
+  const [channelSortConfig, setChannelSortConfig] = useState<{ key: ChannelSortKey; direction: 'asc' | 'desc' }>({ key: 'gmv', direction: 'desc' });
   
   React.useEffect(() => {
     if (data && data.length > 0) {
@@ -64,13 +72,14 @@ export default function PnlTab({ data, onFileUpload, onCloudImport }: PnlTabProp
     );
   }, [data, dateRange]);
 
-  const { dailyKpis, dailyChartData, dailyTableData } = useMemo(() => {
+  const { dailyKpis, dailyChartData, dailyTableData, channelPerformance } = useMemo(() => {
     const kpis = { totalGmv: 0, totalAds: 0, totalTacos: 0, totalUnits: 0, avgAsp: 0 };
     if (filteredData.length === 0) {
-      return { dailyKpis: kpis, dailyChartData: [], dailyTableData: [] };
+      return { dailyKpis: kpis, dailyChartData: [], dailyTableData: [], channelPerformance: [] };
     }
 
     const dailyDataMap: { [key: string]: { date: Date, gmv: number; adsSpent: number; units: number } } = {};
+    const channelDataMap: { [key: string]: { gmv: number; adsSpent: number; units: number } } = {};
     
     filteredData.forEach(d => {
       const day = format(d.date, 'yyyy-MM-dd');
@@ -80,6 +89,13 @@ export default function PnlTab({ data, onFileUpload, onCloudImport }: PnlTabProp
       dailyDataMap[day].gmv += d.gmv;
       dailyDataMap[day].adsSpent += d.adsSpent;
       dailyDataMap[day].units += d.units;
+
+      if (!channelDataMap[d.channel]) {
+          channelDataMap[d.channel] = { gmv: 0, adsSpent: 0, units: 0 };
+      }
+      channelDataMap[d.channel].gmv += d.gmv;
+      channelDataMap[d.channel].adsSpent += d.adsSpent;
+      channelDataMap[d.channel].units += d.units;
     });
 
     const chartData = Object.values(dailyDataMap).map(d => ({
@@ -87,7 +103,7 @@ export default function PnlTab({ data, onFileUpload, onCloudImport }: PnlTabProp
         day: format(d.date, 'dd/MM'),
         gmv: d.gmv,
         adsSpent: d.adsSpent,
-        tacos: d.gmv > 0 ? (d.adsSpent / d.gmv) * 100 : 0,
+        tacos: d.gmv > 0 ? (d.adsSpent / d.gmv) : 0,
         units: d.units,
         avgAsp: d.units > 0 ? d.gmv / d.units : 0,
     }));
@@ -115,8 +131,28 @@ export default function PnlTab({ data, onFileUpload, onCloudImport }: PnlTabProp
       return 0;
     });
 
-    return { dailyKpis: kpis, dailyChartData: chartData.sort((a, b) => a.date.getTime() - b.date.getTime()), dailyTableData: sortedTableData };
-  }, [filteredData, sortConfig]);
+    const perfData = Object.entries(channelDataMap).map(([channel, metrics]) => ({
+      channel,
+      ...metrics,
+      tacos: metrics.gmv > 0 ? metrics.adsSpent / metrics.gmv : 0,
+      avgAsp: metrics.units > 0 ? metrics.gmv / metrics.units : 0,
+    }));
+    
+    const sortedChannelData = [...perfData].sort((a, b) => {
+        const valA = a[channelSortConfig.key];
+        const valB = b[channelSortConfig.key];
+        if (typeof valA === 'string' && typeof valB === 'string') {
+            return channelSortConfig.direction === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+        }
+        if (typeof valA === 'number' && typeof valB === 'number') {
+            return channelSortConfig.direction === 'asc' ? valA - valB : valB - valA;
+        }
+        return 0;
+    });
+
+
+    return { dailyKpis: kpis, dailyChartData: chartData.sort((a, b) => a.date.getTime() - b.date.getTime()), dailyTableData: sortedTableData, channelPerformance: sortedChannelData };
+  }, [filteredData, sortConfig, channelSortConfig]);
 
   const requestSort = (key: SortKey) => {
     let direction: 'asc' | 'desc' = 'desc';
@@ -125,10 +161,23 @@ export default function PnlTab({ data, onFileUpload, onCloudImport }: PnlTabProp
     }
     setSortConfig({ key, direction });
   };
+  
+  const requestChannelSort = (key: ChannelSortKey) => {
+    let direction: 'asc' | 'desc' = 'desc';
+    if (channelSortConfig.key === key && channelSortConfig.direction === 'desc') {
+        direction = 'asc';
+    }
+    setChannelSortConfig({ key, direction });
+  };
 
-  const getSortIcon = (key: SortKey) => {
-    if (sortConfig.key !== key) return null;
-    return sortConfig.direction === 'desc' ? <ArrowDown className="w-3 h-3 ml-1" /> : <ArrowUp className="w-3 h-3 ml-1" />;
+  const getSortIcon = (key: SortKey | ChannelSortKey) => {
+    if (sortConfig.key === key) {
+        return sortConfig.direction === 'desc' ? <ArrowDown className="w-3 h-3 ml-1 inline" /> : <ArrowUp className="w-3 h-3 ml-1 inline" />;
+    }
+    if (channelSortConfig.key === key) {
+        return channelSortConfig.direction === 'desc' ? <ArrowDown className="w-3 h-3 ml-1 inline" /> : <ArrowUp className="w-3 h-3 ml-1 inline" />;
+    }
+    return null;
   };
 
   if (!data) {
@@ -190,7 +239,7 @@ export default function PnlTab({ data, onFileUpload, onCloudImport }: PnlTabProp
                                 id="date"
                                 variant={"outline"}
                                 className={cn(
-                                "w-[300px] justify-start text-left font-normal",
+                                "w-full sm:w-[300px] justify-start text-left font-normal",
                                 !dateRange && "text-muted-foreground"
                                 )}
                             >
@@ -253,62 +302,141 @@ export default function PnlTab({ data, onFileUpload, onCloudImport }: PnlTabProp
       </Card>
       
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-            <KpiCard title="Total GMV" value={`₹${dailyKpis.totalGmv.toLocaleString()}`} />
-            <KpiCard title="Total Ads" value={`₹${dailyKpis.totalAds.toLocaleString()}`} />
+            <KpiCard title="Total GMV" value={`₹${dailyKpis.totalGmv.toLocaleString(undefined, {maximumFractionDigits: 0})}`} />
+            <KpiCard title="Total Ads" value={`₹${dailyKpis.totalAds.toLocaleString(undefined, {maximumFractionDigits: 0})}`} />
             <KpiCard title="Avg TACOS" value={`${(dailyKpis.totalTacos * 100).toFixed(2)}%`} />
             <KpiCard title="Total Units" value={dailyKpis.totalUnits.toLocaleString()} />
             <KpiCard title="Avg ASP" value={`₹${dailyKpis.avgAsp.toFixed(0)}`} />
         </div>
       
-        <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
-            <Card className="xl:col-span-3">
+        <Card>
+            <CardHeader>
+                <CardTitle className="text-base">Performance Over Time</CardTitle>
+                <CardDescription>GMV, Ads Spent, and TACOS trends for the selected period.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ChartContainer config={chartConfig} className="h-[300px] w-full">
+                <ComposedChart data={dailyChartData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="day" fontSize={12} tickFormatter={(tick) => format(new Date(dailyChartData[0].date.getFullYear(), Number(tick.split('/')[1])-1, Number(tick.split('/')[0])), "MMM d")} />
+                    <YAxis yAxisId="left" label={{ value: 'Amount (₹)', angle: -90, position: 'insideLeft' }} stroke="hsl(var(--chart-1))" tickFormatter={(value) => `₹${(value as number / 100000).toFixed(0)}L`} />
+                    <YAxis yAxisId="right" orientation="right" label={{ value: 'TACOS (%)', angle: -90, position: 'insideRight' }} stroke="hsl(var(--chart-3))" tickFormatter={(value) => `${(value as number * 100).toFixed(0)}%`}/>
+                    <Tooltip content={<ChartTooltipContent formatter={(value, name) => name === 'tacos' ? `${(Number(value) * 100).toFixed(2)}%` : `₹${Number(value).toLocaleString()}`} />} />
+                    <Legend />
+                    <Bar dataKey="gmv" yAxisId="left" fill="var(--color-gmv)" name="GMV" />
+                    <Bar dataKey="adsSpent" yAxisId="left" fill="var(--color-adsSpent)" name="Ads Spent" />
+                    <Line type="monotone" dataKey="tacos" yAxisId="right" stroke="var(--color-tacos)" strokeWidth={2} name="TACOS" dot={false} />
+                </ComposedChart>
+              </ChartContainer>
+            </CardContent>
+        </Card>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <Card className="lg:col-span-2">
                 <CardHeader>
-                    <CardTitle className="text-base">Performance Over Time</CardTitle>
-                    <CardDescription>GMV, Ads Spent, and TACOS trends for the selected period.</CardDescription>
+                    <CardTitle className="text-base">Platform Performance</CardTitle>
+                    <CardDescription>Detailed breakdown of metrics by sales channel for the selected period.</CardDescription>
                 </CardHeader>
-                <CardContent>
-                  <ChartContainer config={chartConfig} className="h-[300px] w-full">
-                    <ComposedChart data={dailyChartData}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="day" fontSize={12} />
-                        <YAxis yAxisId="left" label={{ value: 'Amount (₹)', angle: -90, position: 'insideLeft' }} stroke="hsl(var(--chart-1))" />
-                        <YAxis yAxisId="right" orientation="right" label={{ value: 'TACOS (%)', angle: -90, position: 'insideRight' }} stroke="hsl(var(--chart-3))" />
-                        <Tooltip content={<ChartTooltipContent formatter={(value, name) => name === 'tacos' ? `${Number(value).toFixed(2)}%` : `₹${Number(value).toLocaleString()}`} />} />
-                        <Legend />
-                        <Bar dataKey="gmv" yAxisId="left" fill="var(--color-gmv)" name="GMV" />
-                        <Bar dataKey="adsSpent" yAxisId="left" fill="var(--color-adsSpent)" name="Ads Spent" />
-                        <Line type="monotone" dataKey="tacos" yAxisId="right" stroke="var(--color-tacos)" strokeWidth={2} name="TACOS" dot={false} />
-                    </ComposedChart>
-                  </ChartContainer>
-                </CardContent>
-            </Card>
-            <Card className="xl:col-span-2">
-                 <CardHeader>
-                    <CardTitle className="text-base">Daily Breakdown</CardTitle>
-                     <CardDescription>Metrics for each day in the selected range.</CardDescription>
-                </CardHeader>
-                <CardContent className="overflow-y-auto max-h-[350px] custom-scrollbar">
-                    <Table>
-                        <TableHeader className="sticky top-0 bg-card">
+                <CardContent className="overflow-x-auto custom-scrollbar">
+                     <Table>
+                        <TableHeader>
                             <TableRow>
-                                <TableHead className="cursor-pointer" onClick={() => requestSort('date')}>Date {getSortIcon('date')}</TableHead>
-                                <TableHead className="cursor-pointer" onClick={() => requestSort('gmv')}>GMV {getSortIcon('gmv')}</TableHead>
-                                <TableHead className="cursor-pointer" onClick={() => requestSort('tacos')}>TACOS {getSortIcon('tacos')}</TableHead>
+                                <TableHead className="cursor-pointer" onClick={() => requestChannelSort('channel')}>Channel {getSortIcon('channel')}</TableHead>
+                                <TableHead className="cursor-pointer text-right" onClick={() => requestChannelSort('gmv')}>GMV {getSortIcon('gmv')}</TableHead>
+                                <TableHead className="cursor-pointer text-right" onClick={() => requestChannelSort('adsSpent')}>Ads Spent {getSortIcon('adsSpent')}</TableHead>
+                                <TableHead className="cursor-pointer text-right" onClick={() => requestChannelSort('tacos')}>TACOS {getSortIcon('tacos')}</TableHead>
+                                <TableHead className="cursor-pointer text-right" onClick={() => requestChannelSort('units')}>Units {getSortIcon('units')}</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {dailyTableData.map(item => (
-                                <TableRow key={format(item.date, 'yyyy-MM-dd')}>
-                                    <TableCell className="font-medium">{format(item.date, 'MMM dd')}</TableCell>
-                                    <TableCell>₹{item.gmv.toLocaleString()}</TableCell>
-                                    <TableCell>{item.tacos.toFixed(2)}%</TableCell>
+                            {channelPerformance.map(item => (
+                                <TableRow key={item.channel}>
+                                    <TableCell className="font-medium">{item.channel}</TableCell>
+                                    <TableCell className="text-right">₹{item.gmv.toLocaleString(undefined, {maximumFractionDigits: 0})}</TableCell>
+                                    <TableCell className="text-right">₹{item.adsSpent.toLocaleString(undefined, {maximumFractionDigits: 0})}</TableCell>
+                                    <TableCell className={cn("text-right", item.tacos > dailyKpis.totalTacos ? "text-destructive" : "text-green-600")}>{(item.tacos * 100).toFixed(2)}%</TableCell>
+                                    <TableCell className="text-right">{item.units.toLocaleString()}</TableCell>
                                 </TableRow>
                             ))}
                         </TableBody>
                     </Table>
                 </CardContent>
             </Card>
+
+            <div className="space-y-6">
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="text-base">GMV Distribution</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <ChartContainer config={{}} className="h-[200px] w-full">
+                            <PieChart>
+                                <Tooltip content={<ChartTooltipContent hideLabel />} />
+                                <Pie data={channelPerformance} dataKey="gmv" nameKey="channel" cx="50%" cy="50%" outerRadius={80} label>
+                                    {channelPerformance.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                    ))}
+                                </Pie>
+                                <Legend/>
+                            </PieChart>
+                        </ChartContainer>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="text-base">TACOS by Platform</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                         <ChartContainer config={chartConfig} className="h-[200px] w-full">
+                            <BarChart data={channelPerformance} layout="vertical" margin={{left: 100}}>
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis type="number" tickFormatter={(value) => `${(value as number * 100).toFixed(0)}%`}/>
+                                <YAxis type="category" dataKey="channel" width={100} fontSize={12} />
+                                <Tooltip content={<ChartTooltipContent formatter={(value) => `${(Number(value) * 100).toFixed(2)}%`}/>}/>
+                                <Bar dataKey="tacos" fill="var(--color-tacos)">
+                                    {channelPerformance.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                    ))}
+                                </Bar>
+                            </BarChart>
+                        </ChartContainer>
+                    </CardContent>
+                </Card>
+            </div>
         </div>
+
+        <Card>
+             <CardHeader>
+                <CardTitle className="text-base">Daily Breakdown Table</CardTitle>
+                 <CardDescription>Metrics for each day in the selected range.</CardDescription>
+            </CardHeader>
+            <CardContent className="overflow-y-auto max-h-[400px] custom-scrollbar">
+                <Table>
+                    <TableHeader className="sticky top-0 bg-card">
+                        <TableRow>
+                            <TableHead className="cursor-pointer" onClick={() => requestSort('date')}>Date {getSortIcon('date')}</TableHead>
+                            <TableHead className="cursor-pointer text-right" onClick={() => requestSort('gmv')}>GMV {getSortIcon('gmv')}</TableHead>
+                            <TableHead className="cursor-pointer text-right" onClick={() => requestSort('adsSpent')}>Ads Spent {getSortIcon('adsSpent')}</TableHead>
+                            <TableHead className="cursor-pointer text-right" onClick={() => requestSort('tacos')}>TACOS {getSortIcon('tacos')}</TableHead>
+                            <TableHead className="cursor-pointer text-right" onClick={() => requestSort('units')}>Units {getSortIcon('units')}</TableHead>
+                            <TableHead className="cursor-pointer text-right" onClick={() => requestSort('avgAsp')}>Avg ASP {getSortIcon('avgAsp')}</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {dailyTableData.map(item => (
+                            <TableRow key={format(item.date, 'yyyy-MM-dd')}>
+                                <TableCell className="font-medium">{format(item.date, 'MMM dd, yyyy')}</TableCell>
+                                <TableCell className="text-right">₹{item.gmv.toLocaleString(undefined, {maximumFractionDigits: 0})}</TableCell>
+                                <TableCell className="text-right">₹{item.adsSpent.toLocaleString(undefined, {maximumFractionDigits: 0})}</TableCell>
+                                <TableCell className="text-right">{(item.tacos * 100).toFixed(2)}%</TableCell>
+                                <TableCell className="text-right">{item.units.toLocaleString()}</TableCell>
+                                <TableCell className="text-right">₹{item.avgAsp.toFixed(0)}</TableCell>
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
+            </CardContent>
+        </Card>
     </div>
   );
 }
