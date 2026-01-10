@@ -77,7 +77,7 @@ export default function MainView() {
   const initializeData = useCallback(() => {
     setDisplayData(masterData);
     setDailyData(null);
-    setGrowthData(growthMasterData.length > 0 ? growthMasterData : null);
+    setGrowthData(null);
   }, []);
 
   const handleReset = () => {
@@ -163,6 +163,7 @@ export default function MainView() {
               name: item.sku_name,
               type: 'B2C', // Default or determine from data
               price: parseFloat(item.price) || 0,
+              cost: parseFloat(item.cost) || 0,
               shipping: parseFloat(item.shipping) || 0,
               commission: parseFloat(item.commission) || 0,
               stock_kol: parseInt(item.kol_stock, 10) || 0,
@@ -478,7 +479,9 @@ export default function MainView() {
                 ...newSku,
                 id: Date.now(),
                 type: 'B2C',
-                price: 0, shipping: 0, commission: 0,
+                price: 0,
+                cost: 0,
+                shipping: 0, commission: 0,
                 stock_kol: 0, stock_pith: 0, stock_har: 0, stock_blr: 0,
                 stock_unalloc: 0, stock_factory: 0, stock_wip: 0,
                 drr_kol: 0, drr_pith: 0, drr_har: 0, drr_blr: 0, drr: 0,

@@ -4,6 +4,7 @@ export interface InventoryItem {
   type: string;
   name: string;
   price: number;
+  cost: number;
   shipping: number;
   commission: number;
   stock_kol: number;

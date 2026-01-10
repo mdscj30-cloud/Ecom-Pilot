@@ -56,7 +56,7 @@ export default function InventoryTab({ data, searchTerm, onFileUpload, onCloudIm
         
         if (globalCover > 40 && item.drr > 0) { // Overstocked logic for Stuck Capital
             const excessStock = (globalCover - 40) * item.drr;
-            acc.stuckCapital += excessStock * item.price;
+            acc.stuckCapital += excessStock * item.cost;
         }
 
         if (globalCover < 8) { // Stockout logic
@@ -68,7 +68,7 @@ export default function InventoryTab({ data, searchTerm, onFileUpload, onCloudIm
             const drr = item[`drr_${loc}`] || 0;
             return sum + Math.max(0, drr * 15 - stock);
         }, 0);
-        acc.capitalNeeded += deficit * item.price;
+        acc.capitalNeeded += deficit * item.cost;
         
         totalStock += totalLocStock;
         totalDrr += item.drr;
@@ -82,7 +82,7 @@ export default function InventoryTab({ data, searchTerm, onFileUpload, onCloudIm
     return result;
   }, [filteredInventoryData]);
 
-  const renderCell = (stock: number, drr: number, price: number, view: ViewMode) => {
+  const renderCell = (stock: number, drr: number, cost: number, view: ViewMode) => {
     const deficit = Math.max(0, (drr * 15) - stock);
 
     switch (view) {
@@ -95,7 +95,7 @@ export default function InventoryTab({ data, searchTerm, onFileUpload, onCloudIm
             const colorClass = days < 8 ? 'text-destructive font-bold' : days > 40 ? 'text-amber-600' : 'text-green-600';
             return <span className={colorClass}>{days === 999 ? '∞' : `${Math.round(days)}d`}</span>;
         case 'value':
-            return `₹${Math.round(stock * price / 1000)}k`;
+            return `₹${Math.round(stock * cost / 1000)}k`;
         default: // 'units'
             return stock;
     }
@@ -123,7 +123,7 @@ export default function InventoryTab({ data, searchTerm, onFileUpload, onCloudIm
               <SelectItem value="units">📦 Units</SelectItem>
               <SelectItem value="planning">📉 Planning</SelectItem>
               <SelectItem value="days">⏳ Days</SelectItem>
-              <SelectItem value="value">💰 Value</SelectItem>
+              <SelectItem value="value">💰 Cost Value</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -178,6 +178,7 @@ export default function InventoryTab({ data, searchTerm, onFileUpload, onCloudIm
                     <TableHeader className="text-[10px] uppercase tracking-wide bg-muted/50">
                         <TableRow>
                             <TableHead className="p-3 sticky-col bg-card border-r min-w-[150px] z-20">SKU Name</TableHead>
+                            <TableHead className="text-center">Cost</TableHead>
                             <TableHead colSpan={2} className="text-center bg-blue-500/10">Kol</TableHead>
                             <TableHead colSpan={2} className="text-center bg-purple-500/10">Pith</TableHead>
                             <TableHead colSpan={2} className="text-center bg-orange-500/10">Har</TableHead>
@@ -191,6 +192,7 @@ export default function InventoryTab({ data, searchTerm, onFileUpload, onCloudIm
                         </TableRow>
                         <TableRow className="text-[9px] bg-muted/50">
                             <TableHead className="sticky-col bg-card border-r z-20"></TableHead>
+                            <TableHead className="text-center">(₹)</TableHead>
                             <TableHead className="text-center">Stock</TableHead><TableHead className="text-center border-r loc-group-border">DRR</TableHead>
                             <TableHead className="text-center">Stock</TableHead><TableHead className="text-center border-r loc-group-border">DRR</TableHead>
                             <TableHead className="text-center">Stock</TableHead><TableHead className="text-center border-r loc-group-border">DRR</TableHead>
@@ -221,10 +223,11 @@ export default function InventoryTab({ data, searchTerm, onFileUpload, onCloudIm
                             return (
                                 <TableRow key={item.id}>
                                     <TableCell className="sticky-col bg-card border-r font-medium text-foreground">{item.name}</TableCell>
-                                    <TableCell className="text-center">{renderCell(item.stock_kol || 0, item.drr_kol || 0, item.price, viewMode)}</TableCell><TableCell className="text-center border-r loc-group-border text-muted-foreground">{item.drr_kol || 0}</TableCell>
-                                    <TableCell className="text-center">{renderCell(item.stock_pith || 0, item.drr_pith || 0, item.price, viewMode)}</TableCell><TableCell className="text-center border-r loc-group-border text-muted-foreground">{item.drr_pith || 0}</TableCell>
-                                    <TableCell className="text-center">{renderCell(item.stock_har || 0, item.drr_har || 0, item.price, viewMode)}</TableCell><TableCell className="text-center border-r loc-group-border text-muted-foreground">{item.drr_har || 0}</TableCell>
-                                    <TableCell className="text-center">{renderCell(item.stock_blr || 0, item.drr_blr || 0, item.price, viewMode)}</TableCell><TableCell className="text-center border-r loc-group-border text-muted-foreground">{item.drr_blr || 0}</TableCell>
+                                    <TableCell className="text-center font-mono">₹{item.cost.toFixed(0)}</TableCell>
+                                    <TableCell className="text-center">{renderCell(item.stock_kol || 0, item.drr_kol || 0, item.cost, viewMode)}</TableCell><TableCell className="text-center border-r loc-group-border text-muted-foreground">{item.drr_kol || 0}</TableCell>
+                                    <TableCell className="text-center">{renderCell(item.stock_pith || 0, item.drr_pith || 0, item.cost, viewMode)}</TableCell><TableCell className="text-center border-r loc-group-border text-muted-foreground">{item.drr_pith || 0}</TableCell>
+                                    <TableCell className="text-center">{renderCell(item.stock_har || 0, item.drr_har || 0, item.cost, viewMode)}</TableCell><TableCell className="text-center border-r loc-group-border text-muted-foreground">{item.drr_har || 0}</TableCell>
+                                    <TableCell className="text-center">{renderCell(item.stock_blr || 0, item.drr_blr || 0, item.cost, viewMode)}</TableCell><TableCell className="text-center border-r loc-group-border text-muted-foreground">{item.drr_blr || 0}</TableCell>
                                     <TableCell className="text-center font-bold text-foreground">{Math.round(globalCover)}d</TableCell>
                                     <TableCell className="text-center text-lg">{item.id % 2 === 0 ? <ArrowUp className="w-4 h-4 mx-auto text-green-500" /> : <ArrowDown className="w-4 h-4 mx-auto text-red-400" />}</TableCell>
                                     <TableCell className="text-center text-muted-foreground">{rop}</TableCell>
@@ -235,7 +238,7 @@ export default function InventoryTab({ data, searchTerm, onFileUpload, onCloudIm
                                     <TableCell className="text-center bg-yellow-500/10">
                                         <div className="flex flex-col text-[10px]">
                                             <span className="font-bold text-destructive">{totalDeficit > 0 ? totalDeficit : '-'}</span>
-                                            <span className="text-muted-foreground">₹{Math.round(totalDeficit*item.price/1000)}k</span>
+                                            <span className="text-muted-foreground">₹{Math.round(totalDeficit*item.cost/1000)}k</span>
                                         </div>
                                     </TableCell>
                                 </TableRow>
@@ -249,5 +252,3 @@ export default function InventoryTab({ data, searchTerm, onFileUpload, onCloudIm
     </div>
   );
 }
-
-    
