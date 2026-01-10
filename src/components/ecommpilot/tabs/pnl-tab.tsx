@@ -294,28 +294,28 @@ export default function PnlTab({ data, onFileUpload, onCloudImport }: PnlTabProp
                     </Popover>
                     <TooltipProvider>
                          <UiTooltip>
-                            <UiTooltipContent>Download Template</UiTooltipContent>
                             <UiTooltipTrigger asChild>
                                 <Button size="icon" variant="outline" className="h-9 w-9" asChild>
                                     <a href="/pnl-template.csv" download><Download className="w-4 h-4" /></a>
                                 </Button>
                             </UiTooltipTrigger>
+                            <UiTooltipContent>Download Template</UiTooltipContent>
                         </UiTooltip>
                         <UiTooltip>
-                             <UiTooltipContent>Import from file</UiTooltipContent>
-                            <UiTooltipTrigger asChild>
+                             <UiTooltipTrigger asChild>
                                 <Button size="icon" variant="outline" className="h-9 w-9" onClick={() => document.getElementById('daily-upload')?.click()}>
                                     <Upload className="w-4 h-4" />
                                 </Button>
                             </UiTooltipTrigger>
+                             <UiTooltipContent>Import from file</UiTooltipContent>
                         </UiTooltip>
                         <UiTooltip>
-                            <UiTooltipContent>Import from Google Sheet</UiTooltipContent>
                             <UiTooltipTrigger asChild>
                                 <Button size="icon" variant="outline" className="h-9 w-9" onClick={onCloudImport}>
                                     <Cloud className="w-4 h-4" />
                                 </Button>
                             </UiTooltipTrigger>
+                            <UiTooltipContent>Import from Google Sheet</UiTooltipContent>
                         </UiTooltip>
                     </TooltipProvider>
                     <input type="file" id="daily-upload" className="hidden" accept=".xlsx, .xls, .csv" onChange={onFileUpload}/>
@@ -415,7 +415,7 @@ export default function PnlTab({ data, onFileUpload, onCloudImport }: PnlTabProp
                                 <CartesianGrid strokeDasharray="3 3" />
                                 <XAxis type="number" tickFormatter={(value) => `${(value as number * 100).toFixed(0)}%`}/>
                                 <YAxis type="category" dataKey="channel" width={100} fontSize={12} />
-                                <Tooltip content={<UiTooltipContent formatter={(value) => `${(Number(value) * 100).toFixed(2)}%`}/>}/>
+                                <Tooltip content={<ChartTooltipContent formatter={(value) => `${(Number(value) * 100).toFixed(2)}%`}/>}/>
                                 <Bar dataKey="tacos" fill="var(--color-tacos)">
                                     {channelPerformance.map((entry, index) => (
                                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
@@ -511,7 +511,3 @@ export default function PnlTab({ data, onFileUpload, onCloudImport }: PnlTabProp
     </div>
   );
 }
-
-
-
-    
