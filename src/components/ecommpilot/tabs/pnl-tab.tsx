@@ -1,11 +1,11 @@
 
 "use client";
 
-import { Bar, ComposedChart, XAxis, YAxis, CartesianGrid, Legend, Tooltip } from 'recharts';
+import { Line, ComposedChart, XAxis, YAxis, CartesianGrid, Legend, Tooltip, Bar } from 'recharts';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
 import { Button } from '@/components/ui/button';
-import { Calendar as CalendarIcon, Upload, Cloud, Download, AlertTriangle, CheckCircle, ArrowUp, ArrowDown } from "lucide-react";
+import { Calendar as CalendarIcon, Upload, Cloud, Download, ArrowUp, ArrowDown } from "lucide-react";
 import React, { useMemo, useState } from 'react';
 import type { ProcessedSheetData } from '@/lib/types';
 import {
@@ -19,10 +19,10 @@ import {
 import { Tooltip as UiTooltip, TooltipContent as UiTooltipContent, TooltipProvider, TooltipTrigger as UiTooltipTrigger } from '@/components/ui/tooltip';
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { format, subDays, startOfToday } from 'date-fns';
+import { format, subDays, startOfToday, endOfToday, addDays } from 'date-fns';
 import KpiCard from '../kpi-card';
 import { cn } from '@/lib/utils';
-import { Badge } from '@/components/ui/badge';
+import { DateRange } from 'react-day-picker';
 
 interface PnlTabProps {
   data: ProcessedSheetData[] | null;
@@ -33,89 +33,90 @@ interface PnlTabProps {
 const chartConfig = {
   gmv: { label: "GMV", color: "hsl(var(--chart-1))" },
   adsSpent: { label: "Ads Spent", color: "hsl(var(--chart-2))" },
+  tacos: { label: "TACOS", color: "hsl(var(--chart-3))" },
 };
 
-type SortKey = 'gmv' | 'ads' | 'tacos' | 'units' | 'avgAsp' | 'deltaVsYesterday';
+type SortKey = 'date' | 'gmv' | 'adsSpent' | 'tacos' | 'units' | 'avgAsp';
 
 export default function PnlTab({ data, onFileUpload, onCloudImport }: PnlTabProps) {
-  const [selectedDate, setSelectedDate] = useState<Date>(startOfToday());
-  const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' }>({ key: 'gmv', direction: 'desc' });
 
-  const { todayData, yesterdayData } = useMemo(() => {
-    if (!data) return { todayData: null, yesterdayData: null };
-    const todayStr = format(selectedDate, 'yyyy-MM-dd');
-    const yesterdayStr = format(subDays(selectedDate, 1), 'yyyy-MM-dd');
-    
-    return {
-      todayData: data.filter(d => format(d.date, 'yyyy-MM-dd') === todayStr),
-      yesterdayData: data.filter(d => format(d.date, 'yyyy-MM-dd') === yesterdayStr)
-    };
-  }, [data, selectedDate]);
+  const defaultDateRange = {
+    from: data && data.length > 0 ? data.reduce((min, p) => p.date < min ? p.date : min, data[0].date) : startOfToday(),
+    to: data && data.length > 0 ? data.reduce((max, p) => p.date > max ? p.date : max, data[0].date) : endOfToday(),
+  }
 
-  const { dailyKpis, dailyChannelPerformance, dailyChartData } = useMemo(() => {
-    const kpis = { todayGmv: 0, todayAds: 0, todayTacos: 0, unitsSold: 0, avgAsp: 0 };
-    if (!todayData || todayData.length === 0) {
-      return { dailyKpis: kpis, dailyChannelPerformance: [], dailyChartData: [] };
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(defaultDateRange);
+  const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' });
+  
+  React.useEffect(() => {
+    if (data && data.length > 0) {
+      const minDate = data.reduce((min, p) => p.date < min ? p.date : min, data[0].date);
+      const maxDate = data.reduce((max, p) => p.date > max ? p.date : max, data[0].date);
+      setDateRange({ from: minDate, to: maxDate });
+    }
+  }, [data]);
+
+  const filteredData = useMemo(() => {
+    if (!data) return [];
+    return data.filter(d => 
+      (!dateRange?.from || d.date >= dateRange.from) &&
+      (!dateRange?.to || d.date <= dateRange.to)
+    );
+  }, [data, dateRange]);
+
+  const { dailyKpis, dailyChartData, dailyTableData } = useMemo(() => {
+    const kpis = { totalGmv: 0, totalAds: 0, totalTacos: 0, totalUnits: 0, avgAsp: 0 };
+    if (filteredData.length === 0) {
+      return { dailyKpis: kpis, dailyChartData: [], dailyTableData: [] };
     }
 
-    const channelDataMap: { [key: string]: { gmv: number; ads: number; units: number } } = {};
+    const dailyDataMap: { [key: string]: { date: Date, gmv: number; adsSpent: number; units: number } } = {};
     
-    todayData.forEach(d => {
-      kpis.todayGmv += d.gmv;
-      kpis.todayAds += d.adsSpent;
-      kpis.unitsSold += d.units;
-
-      if (!channelDataMap[d.channel]) {
-        channelDataMap[d.channel] = { gmv: 0, ads: 0, units: 0 };
+    filteredData.forEach(d => {
+      const day = format(d.date, 'yyyy-MM-dd');
+      if (!dailyDataMap[day]) {
+        dailyDataMap[day] = { date: d.date, gmv: 0, adsSpent: 0, units: 0 };
       }
-      channelDataMap[d.channel].gmv += d.gmv;
-      channelDataMap[d.channel].ads += d.adsSpent;
-      channelDataMap[d.channel].units += d.units;
+      dailyDataMap[day].gmv += d.gmv;
+      dailyDataMap[day].adsSpent += d.adsSpent;
+      dailyDataMap[day].units += d.units;
     });
 
-    kpis.todayTacos = kpis.todayGmv > 0 ? kpis.todayAds / kpis.todayGmv : 0;
-    kpis.avgAsp = kpis.unitsSold > 0 ? kpis.todayGmv / kpis.unitsSold : 0;
-
-    const performance = Object.keys(channelDataMap).map(channel => {
-      const today = channelDataMap[channel];
-      const yesterdayGmv = yesterdayData?.filter(d => d.channel === channel).reduce((sum, d) => sum + d.gmv, 0) || 0;
-      const deltaVsYesterday = yesterdayGmv > 0 ? (today.gmv - yesterdayGmv) / yesterdayGmv : today.gmv > 0 ? Infinity : 0;
-      
-      const last7DaysData = data?.filter(d => 
-        d.channel === channel && 
-        d.date < selectedDate && 
-        d.date >= subDays(selectedDate, 7)
-      ) || [];
-      
-      const avgLast7DaysAds = last7DaysData.length > 0 ? last7DaysData.reduce((sum, d) => sum + d.adsSpent, 0) / last7DaysData.length : 0;
-      const avgLast7DaysGmv = last7DaysData.length > 0 ? last7DaysData.reduce((sum, d) => sum + d.gmv, 0) / last7DaysData.length : 0;
-
-      const spendAlert = today.ads > avgLast7DaysAds * 1.3;
-      const revenueAlert = today.gmv < avgLast7DaysGmv * 0.85;
-
-      return {
-        channel,
-        gmv: today.gmv,
-        ads: today.ads,
-        tacos: today.gmv > 0 ? today.ads / today.gmv : 0,
-        units: today.units,
-        avgAsp: today.units > 0 ? today.gmv / today.units : 0,
-        deltaVsYesterday,
-        spendAlert,
-        revenueAlert
-      };
+    const chartData = Object.values(dailyDataMap).map(d => ({
+        date: d.date,
+        day: format(d.date, 'dd/MM'),
+        gmv: d.gmv,
+        adsSpent: d.adsSpent,
+        tacos: d.gmv > 0 ? (d.adsSpent / d.gmv) * 100 : 0,
+        units: d.units,
+        avgAsp: d.units > 0 ? d.gmv / d.units : 0,
+    }));
+    
+    chartData.forEach(d => {
+      kpis.totalGmv += d.gmv;
+      kpis.totalAds += d.adsSpent;
+      kpis.totalUnits += d.units;
     });
 
-    const sortedPerformance = [...performance].sort((a, b) => {
-        if (sortConfig.direction === 'asc') {
-            return a[sortConfig.key] - b[sortConfig.key];
-        }
-        return b[sortConfig.key] - a[sortConfig.key];
+    kpis.totalTacos = kpis.totalGmv > 0 ? kpis.totalAds / kpis.totalGmv : 0;
+    kpis.avgAsp = kpis.totalUnits > 0 ? kpis.totalGmv / kpis.totalUnits : 0;
+    
+    const sortedTableData = [...chartData].sort((a, b) => {
+      if (sortConfig.key === 'date') {
+        const valA = a.date.getTime();
+        const valB = b.date.getTime();
+        return sortConfig.direction === 'asc' ? valA - valB : valB - valA;
+      }
+      const valA = a[sortConfig.key];
+      const valB = b[sortConfig.key];
+      if (typeof valA === 'number' && typeof valB === 'number') {
+        return sortConfig.direction === 'asc' ? valA - valB : valB - valA;
+      }
+      return 0;
     });
 
-
-    return { dailyKpis: kpis, dailyChannelPerformance: sortedPerformance, dailyChartData: performance };
-  }, [todayData, yesterdayData, data, selectedDate, sortConfig]);
+    return { dailyKpis: kpis, dailyChartData: chartData.sort((a, b) => a.date.getTime() - b.date.getTime()), dailyTableData: sortedTableData };
+  }, [filteredData, sortConfig]);
 
   const requestSort = (key: SortKey) => {
     let direction: 'asc' | 'desc' = 'desc';
@@ -185,39 +186,64 @@ export default function PnlTab({ data, onFileUpload, onCloudImport }: PnlTabProp
                  <div className="flex items-center gap-2">
                     <Popover>
                         <PopoverTrigger asChild>
-                            <Button variant="outline" className={cn("w-[240px] justify-start text-left font-normal", !selectedDate && "text-muted-foreground")}>
+                             <Button
+                                id="date"
+                                variant={"outline"}
+                                className={cn(
+                                "w-[300px] justify-start text-left font-normal",
+                                !dateRange && "text-muted-foreground"
+                                )}
+                            >
                                 <CalendarIcon className="mr-2 h-4 w-4" />
-                                {selectedDate ? format(selectedDate, "PPP") : <span>Pick a date</span>}
+                                {dateRange?.from ? (
+                                dateRange.to ? (
+                                    <>
+                                    {format(dateRange.from, "LLL dd, y")} -{" "}
+                                    {format(dateRange.to, "LLL dd, y")}
+                                    </>
+                                ) : (
+                                    format(dateRange.from, "LLL dd, y")
+                                )
+                                ) : (
+                                <span>Pick a date</span>
+                                )}
                             </Button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar mode="single" selected={selectedDate} onSelect={(day) => day && setSelectedDate(day)} initialFocus />
+                        <PopoverContent className="w-auto p-0" align="end">
+                            <Calendar
+                                initialFocus
+                                mode="range"
+                                defaultMonth={dateRange?.from}
+                                selected={dateRange}
+                                onSelect={setDateRange}
+                                numberOfMonths={2}
+                            />
                         </PopoverContent>
                     </Popover>
                     <TooltipProvider>
                          <UiTooltip>
+                            <UiTooltipContent>Download Template</UiTooltipContent>
                             <UiTooltipTrigger asChild>
                                 <Button size="icon" variant="outline" className="h-9 w-9" asChild>
                                     <a href="/pnl-template.csv" download><Download className="w-4 h-4" /></a>
                                 </Button>
                             </UiTooltipTrigger>
-                            <UiTooltipContent><p>Download Template</p></UiTooltipContent>
                         </UiTooltip>
                         <UiTooltip>
+                             <UiTooltipContent>Import from file</UiTooltipContent>
                             <UiTooltipTrigger asChild>
                                 <Button size="icon" variant="outline" className="h-9 w-9" onClick={() => document.getElementById('daily-upload')?.click()}>
                                     <Upload className="w-4 h-4" />
                                 </Button>
                             </UiTooltipTrigger>
-                            <UiTooltipContent><p>Import from file</p></UiTooltipContent>
                         </UiTooltip>
                         <UiTooltip>
+                            <UiTooltipContent>Import from Google Sheet</UiTooltipContent>
                             <UiTooltipTrigger asChild>
                                 <Button size="icon" variant="outline" className="h-9 w-9" onClick={onCloudImport}>
                                     <Cloud className="w-4 h-4" />
                                 </Button>
                             </UiTooltipTrigger>
-                            <UiTooltipContent><p>Import from Google Sheet</p></UiTooltipContent>
                         </UiTooltip>
                     </TooltipProvider>
                     <input type="file" id="daily-upload" className="hidden" accept=".xlsx, .xls, .csv" onChange={onFileUpload}/>
@@ -227,68 +253,63 @@ export default function PnlTab({ data, onFileUpload, onCloudImport }: PnlTabProp
       </Card>
       
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-            <KpiCard title="Today GMV" value={`₹${dailyKpis.todayGmv.toLocaleString()}`} />
-            <KpiCard title="Today Ads" value={`₹${dailyKpis.todayAds.toLocaleString()}`} />
-            <KpiCard title="Today TACOS" value={`${(dailyKpis.todayTacos * 100).toFixed(2)}%`} />
-            <KpiCard title="Units Sold" value={dailyKpis.unitsSold.toLocaleString()} />
+            <KpiCard title="Total GMV" value={`₹${dailyKpis.totalGmv.toLocaleString()}`} />
+            <KpiCard title="Total Ads" value={`₹${dailyKpis.totalAds.toLocaleString()}`} />
+            <KpiCard title="Avg TACOS" value={`${(dailyKpis.totalTacos * 100).toFixed(2)}%`} />
+            <KpiCard title="Total Units" value={dailyKpis.totalUnits.toLocaleString()} />
             <KpiCard title="Avg ASP" value={`₹${dailyKpis.avgAsp.toFixed(0)}`} />
         </div>
       
-        <Card>
-            <CardHeader><CardTitle className='text-base'>Daily Ads Efficiency &amp; Alerts</CardTitle></CardHeader>
-            <CardContent>
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                <div>
-                  <h3 className="text-sm font-semibold mb-2">Daily Ads vs GMV</h3>
-                  <ChartContainer config={chartConfig} className="h-[250px] w-full">
+        <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
+            <Card className="xl:col-span-3">
+                <CardHeader>
+                    <CardTitle className="text-base">Performance Over Time</CardTitle>
+                    <CardDescription>GMV, Ads Spent, and TACOS trends for the selected period.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ChartContainer config={chartConfig} className="h-[300px] w-full">
                     <ComposedChart data={dailyChartData}>
                         <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="channel" fontSize={12} />
-                        <YAxis yAxisId="left" orientation="left" stroke="hsl(var(--chart-1))" />
-                        <YAxis yAxisId="right" orientation="right" stroke="hsl(var(--chart-2))" />
-                        <Tooltip content={<ChartTooltipContent formatter={(value) => `₹${Number(value).toLocaleString()}`} />} />
+                        <XAxis dataKey="day" fontSize={12} />
+                        <YAxis yAxisId="left" label={{ value: 'Amount (₹)', angle: -90, position: 'insideLeft' }} stroke="hsl(var(--chart-1))" />
+                        <YAxis yAxisId="right" orientation="right" label={{ value: 'TACOS (%)', angle: -90, position: 'insideRight' }} stroke="hsl(var(--chart-3))" />
+                        <Tooltip content={<ChartTooltipContent formatter={(value, name) => name === 'tacos' ? `${Number(value).toFixed(2)}%` : `₹${Number(value).toLocaleString()}`} />} />
                         <Legend />
                         <Bar dataKey="gmv" yAxisId="left" fill="var(--color-gmv)" name="GMV" />
-                        <Bar dataKey="ads" yAxisId="right" fill="var(--color-adsSpent)" name="Ads" />
+                        <Bar dataKey="adsSpent" yAxisId="left" fill="var(--color-adsSpent)" name="Ads Spent" />
+                        <Line type="monotone" dataKey="tacos" yAxisId="right" stroke="var(--color-tacos)" strokeWidth={2} name="TACOS" dot={false} />
                     </ComposedChart>
                   </ChartContainer>
-                </div>
-                <div className="overflow-x-auto custom-scrollbar">
-                    <h3 className="text-sm font-semibold mb-2">Performance vs Yesterday</h3>
+                </CardContent>
+            </Card>
+            <Card className="xl:col-span-2">
+                 <CardHeader>
+                    <CardTitle className="text-base">Daily Breakdown</CardTitle>
+                     <CardDescription>Metrics for each day in the selected range.</CardDescription>
+                </CardHeader>
+                <CardContent className="overflow-y-auto max-h-[350px] custom-scrollbar">
                     <Table>
-                        <TableHeader>
+                        <TableHeader className="sticky top-0 bg-card">
                             <TableRow>
-                                <TableHead>Channel</TableHead>
+                                <TableHead className="cursor-pointer" onClick={() => requestSort('date')}>Date {getSortIcon('date')}</TableHead>
                                 <TableHead className="cursor-pointer" onClick={() => requestSort('gmv')}>GMV {getSortIcon('gmv')}</TableHead>
                                 <TableHead className="cursor-pointer" onClick={() => requestSort('tacos')}>TACOS {getSortIcon('tacos')}</TableHead>
-                                <TableHead className="cursor-pointer" onClick={() => requestSort('deltaVsYesterday')}>Δ vs Yday {getSortIcon('deltaVsYesterday')}</TableHead>
-                                <TableHead>Alerts</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {dailyChannelPerformance.map(item => (
-                                <TableRow key={item.channel}>
-                                    <TableCell className="font-medium">{item.channel}</TableCell>
+                            {dailyTableData.map(item => (
+                                <TableRow key={format(item.date, 'yyyy-MM-dd')}>
+                                    <TableCell className="font-medium">{format(item.date, 'MMM dd')}</TableCell>
                                     <TableCell>₹{item.gmv.toLocaleString()}</TableCell>
-                                    <TableCell>{(item.tacos * 100).toFixed(2)}%</TableCell>
-                                    <TableCell className={cn(item.deltaVsYesterday >= 0 ? 'text-green-600' : 'text-destructive')}>
-                                        {isFinite(item.deltaVsYesterday) ? `${(item.deltaVsYesterday * 100).toFixed(1)}%` : 'N/A'}
-                                    </TableCell>
-                                    <TableCell>
-                                        <div className="flex items-center gap-2">
-                                            {item.spendAlert && <Badge variant="destructive" className="flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> Overspend</Badge>}
-                                            {item.revenueAlert && <Badge variant="destructive" className="flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> Drop</Badge>}
-                                            {!item.spendAlert && !item.revenueAlert && <Badge className="bg-green-600/20 text-green-700 flex items-center gap-1"><CheckCircle className="w-3 h-3" /> OK</Badge>}
-                                        </div>
-                                    </TableCell>
+                                    <TableCell>{item.tacos.toFixed(2)}%</TableCell>
                                 </TableRow>
                             ))}
                         </TableBody>
                     </Table>
-                </div>
-            </div>
-          </CardContent>
-        </Card>
+                </CardContent>
+            </Card>
+        </div>
     </div>
   );
 }
+
