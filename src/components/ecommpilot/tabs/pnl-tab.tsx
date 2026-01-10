@@ -40,7 +40,7 @@ export default function PnlTab({ data, onFileUpload, onCloudImport }: PnlTabProp
   const { todayData, yesterdayData } = useMemo(() => {
     if (!data) return { todayData: null, yesterdayData: null };
     const todayStr = format(selectedDate, 'yyyy-MM-dd');
-    const yesterdayStr = format(startOfYesterday(), 'yyyy-MM-dd');
+    const yesterdayStr = format(subDays(selectedDate, 1), 'yyyy-MM-dd');
     
     return {
       todayData: data.filter(d => format(d.date, 'yyyy-MM-dd') === todayStr),
@@ -83,8 +83,8 @@ export default function PnlTab({ data, onFileUpload, onCloudImport }: PnlTabProp
         d.date >= subDays(selectedDate, 7)
       ) || [];
       
-      const avgLast7DaysAds = last7DaysData.reduce((sum, d) => sum + d.adsSpent, 0) / 7;
-      const avgLast7DaysGmv = last7DaysData.reduce((sum, d) => sum + d.gmv, 0) / 7;
+      const avgLast7DaysAds = last7DaysData.length > 0 ? last7DaysData.reduce((sum, d) => sum + d.adsSpent, 0) / last7DaysData.length : 0;
+      const avgLast7DaysGmv = last7DaysData.length > 0 ? last7DaysData.reduce((sum, d) => sum + d.gmv, 0) / last7DaysData.length : 0;
 
       const spendAlert = today.ads > avgLast7DaysAds * 1.3;
       const revenueAlert = today.gmv < avgLast7DaysGmv * 0.85;
@@ -171,30 +171,30 @@ export default function PnlTab({ data, onFileUpload, onCloudImport }: PnlTabProp
                         </PopoverContent>
                     </Popover>
                     <TooltipProvider>
-                         <Tooltip>
-                            <TooltipContent>Download Template</TooltipContent>
-                            <TooltipTrigger asChild>
+                         <UiTooltip>
+                            <UiTooltipTrigger asChild>
                                 <Button size="icon" variant="outline" className="h-9 w-9" asChild>
                                     <a href="/pnl-template.csv" download><Download className="w-4 h-4" /></a>
                                 </Button>
-                            </TooltipTrigger>
-                        </Tooltip>
-                        <Tooltip>
-                            <TooltipContent>Import from file</TooltipContent>
-                            <TooltipTrigger asChild>
+                            </UiTooltipTrigger>
+                            <UiTooltipContent>Download Template</UiTooltipContent>
+                        </UiTooltip>
+                        <UiTooltip>
+                            <UiTooltipTrigger asChild>
                                 <Button size="icon" variant="outline" className="h-9 w-9" onClick={() => document.getElementById('daily-upload')?.click()}>
                                     <Upload className="w-4 h-4" />
                                 </Button>
-                            </TooltipTrigger>
-                        </Tooltip>
-                        <Tooltip>
-                            <TooltipContent>Import from Google Sheet</TooltipContent>
-                            <TooltipTrigger asChild>
+                            </UiTooltipTrigger>
+                            <UiTooltipContent>Import from file</UiTooltipContent>
+                        </UiTooltip>
+                        <UiTooltip>
+                            <UiTooltipTrigger asChild>
                                 <Button size="icon" variant="outline" className="h-9 w-9" onClick={onCloudImport}>
                                     <Cloud className="w-4 h-4" />
                                 </Button>
-                            </TooltipTrigger>
-                        </Tooltip>
+                            </UiTooltipTrigger>
+                            <UiTooltipContent>Import from Google Sheet</UiTooltipContent>
+                        </UiTooltip>
                     </TooltipProvider>
                     <input type="file" id="daily-upload" className="hidden" accept=".xlsx, .xls, .csv" onChange={onFileUpload}/>
                 </div>
