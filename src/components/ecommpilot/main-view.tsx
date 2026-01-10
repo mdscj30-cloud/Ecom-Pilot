@@ -175,7 +175,7 @@ export default function MainView() {
     
             platformHeaders.forEach((header, index) => {
               if (header && typeof header === 'string') {
-                const match = header.match(/(?:\d+\s+of\s+\d+:\s*)?(.*)/);
+                const match = header.match(/(?:\d+\s*(?:and\s*\d+)?\s*of\s+\d+:\s*)?(.*)/);
                 const platformName = match ? match[1].trim() : null;
                 
                 if (platformName && metricHeaders[index] === 'GMV') {
@@ -197,17 +197,19 @@ export default function MainView() {
                 if (!dateRaw) return;
 
                 let date: Date;
+                const dateFormatsToTry = ["MMM'yy", "dd-MMM", "yyyy-MM-dd", "MM/dd/yy"];
+                
                 if (typeof dateRaw === 'number') {
-                    const parsedDate = XLSX.SSF.parse_date_code(dateRaw);
-                    date = new Date(parsedDate.y, parsedDate.m - 1, parsedDate.d, parsedDate.H, parsedDate.M, parsedDate.S);
+                    // It's an Excel date serial number
+                    const excelEpoch = new Date(1899, 11, 30);
+                    date = new Date(excelEpoch.getTime() + dateRaw * 86400000);
                 } else if (typeof dateRaw === 'string') {
-                    // Try parsing formats like "MMM'yy" or "dd-MMM" or other common date strings
-                    let parsedDate = parse(dateRaw, "MMM'yy", new Date());
+                    let parsedDate = new Date(dateRaw); // Try direct parsing first
                     if (!isValid(parsedDate)) {
-                        parsedDate = parse(dateRaw, "dd-MMM", new Date());
-                    }
-                    if (!isValid(parsedDate)) {
-                       parsedDate = new Date(dateRaw); // Fallback for ISO strings etc.
+                        for (const fmt of dateFormatsToTry) {
+                            parsedDate = parse(dateRaw, fmt, new Date());
+                            if (isValid(parsedDate)) break;
+                        }
                     }
                     date = parsedDate;
                 } else {
@@ -222,8 +224,10 @@ export default function MainView() {
                     for (let i = platform.startIndex; i <= platform.endIndex; i++) {
                         const metric = metricHeaders[i];
                         const value = row[i];
-                        const numValue = (typeof value === 'string') ? parseFloat(value.replace(/,/g, '')) || 0 : (typeof value === 'number' ? value : 0);
+                        if (value === null || value === undefined) continue;
 
+                        const numValue = (typeof value === 'string') ? parseFloat(value.replace(/,/g, '')) || 0 : (typeof value === 'number' ? value : 0);
+                        
                         switch (metric) {
                             case 'GMV': gmv = numValue; break;
                             case 'Units': units = numValue; break;
@@ -481,6 +485,8 @@ export default function MainView() {
     </>
   );
 }
+
+    
 
     
 
