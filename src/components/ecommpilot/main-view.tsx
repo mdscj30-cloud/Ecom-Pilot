@@ -145,9 +145,9 @@ export default function MainView() {
                 drr_har: parseInt(item['Har DRR'])||0,
                 stock_blr: parseInt(item['Blr Stock'])||0,
                 drr_blr: parseInt(item['Blr DRR'])||0,
-                stock_unalloc: parseInt(item['Unalloc Stock']) || 0,
-                stock_factory: parseInt(item['Factory Stock']) || 0,
-                stock_wip: parseInt(item['WIP Stock']) || 0,
+                stock_unalloc: parseInt(item['Unalloc Stock'] || item['Unalloc']) || 0,
+                stock_factory: parseInt(item['Factory Stock'] || item['Factory']) || 0,
+                stock_wip: parseInt(item['WIP Stock'] || item['WIP']) || 0,
                 spend: parseFloat(item['Ad Spend'])||0, 
                 orders: parseInt(item['Orders'])||0, 
                 returns: parseInt(item['Returns'])||0,
@@ -171,87 +171,85 @@ export default function MainView() {
             const platformHeaders = json[0];
             const metricHeaders = json[1];
             const dataRows = json.slice(2);
-
+            
             const platformDetails: { name: string, startIndex: number, endIndex: number }[] = [];
             let currentPlatformName: string | null = null;
             let currentPlatformStartIndex = -1;
 
-            platformHeaders.forEach((header, index) => {
+            for (let i = 1; i < platformHeaders.length; i++) {
+                const header = platformHeaders[i];
                 if (header && typeof header === 'string' && header.trim() !== '') {
-                    const match = header.match(/(?:\d+(?:and\d+)?\s*of\s+\d+:\s*)?(.*)/);
-                    const platformName = match ? match[1].trim() : header.trim();
-                    
-                    if (platformName && metricHeaders[index]?.toLowerCase() === 'gmv') {
-                        if (currentPlatformName !== null) {
-                            platformDetails.push({ name: currentPlatformName, startIndex: currentPlatformStartIndex, endIndex: index - 1 });
-                        }
-                        currentPlatformName = platformName;
-                        currentPlatformStartIndex = index;
+                    // This is a new platform starting
+                    if (currentPlatformName) {
+                        // End the previous platform
+                        platformDetails.push({ name: currentPlatformName, startIndex: currentPlatformStartIndex, endIndex: i - 1 });
                     }
+                    // Start a new platform
+                    currentPlatformName = header.trim().replace(/^(\d+\s*(and\d+)?\s*of\s+\d+:\s*)/, '');
+                    currentPlatformStartIndex = i;
                 }
-            });
-
-            if (currentPlatformName !== null) {
+            }
+             // Add the last platform
+            if (currentPlatformName) {
                 platformDetails.push({ name: currentPlatformName, startIndex: currentPlatformStartIndex, endIndex: platformHeaders.length - 1 });
             }
 
             const processedData: ProcessedSheetData[] = [];
+
             dataRows.forEach(row => {
                 const dateRaw = row[0];
                 if (!dateRaw) return;
 
-                let date: Date;
+                let date: Date | null = null;
                 if (typeof dateRaw === 'number') {
                     const excelEpoch = new Date(Date.UTC(1899, 11, 30));
                     date = new Date(excelEpoch.getTime() + dateRaw * 86400000);
                 } else if (typeof dateRaw === 'string') {
                     const dateFormatsToTry = ["MMM'yy", "dd-MMM-yy", "dd-MMM", "yyyy-MM-dd", "MM/dd/yy", "M/d/yy"];
-                    let parsedDate: Date | null = null;
                     for (const fmt of dateFormatsToTry) {
                         const d = parse(dateRaw, fmt, new Date());
                         if (isValid(d)) {
-                            parsedDate = d;
+                            date = d;
                             break;
                         }
                     }
-                     if (!parsedDate && /^\d{5}$/.test(dateRaw)) { // Handle Excel date serial number as string
+                     if (!date && /^\d{5}$/.test(dateRaw)) {
                         const excelEpoch = new Date(Date.UTC(1899, 11, 30));
                         date = new Date(excelEpoch.getTime() + parseInt(dateRaw, 10) * 86400000);
-                    } else if (parsedDate) {
-                        date = parsedDate;
-                    } else {
-                        return;
                     }
-                } else {
-                    return; // Skip if date is not a number or string
                 }
-                
-                if (!isValid(date)) return;
+
+                if (!date || !isValid(date)) return;
 
                 platformDetails.forEach(platform => {
                     let gmv = 0, units = 0, packets = 0, adsSpent = 0;
-
+                    
+                    const metricMap: { [key: string]: number } = { gmv: 0, units: 0, packets: 0, adsSpent: 0 };
+                    
                     for (let i = platform.startIndex; i <= platform.endIndex; i++) {
-                        const metric = metricHeaders[i];
+                        const metric = metricHeaders[i]?.toLowerCase().trim();
                         const value = row[i];
-                        if (value === null || value === undefined || value === '-') continue;
+                        if (value === null || value === undefined || value === '-' || value === '') continue;
 
                         const numValue = (typeof value === 'string') ? parseFloat(value.replace(/[,₹]/g, '')) || 0 : (typeof value === 'number' ? value : 0);
-                        
-                        switch (metric?.toLowerCase()) {
-                            case 'gmv': gmv += numValue; break;
-                            case 'units': units += numValue; break;
-                            case 'packets': packets += numValue; break;
-                            case 'ads spent': adsSpent += numValue; break;
-                        }
+
+                        if (metric === 'gmv') metricMap.gmv += numValue;
+                        else if (metric === 'units') metricMap.units += numValue;
+                        else if (metric === 'packets') metricMap.packets += numValue;
+                        else if (metric === 'ads spent') metricMap.adsSpent += numValue;
                     }
+                    
+                    gmv = metricMap.gmv;
+                    units = metricMap.units;
+                    packets = metricMap.packets;
+                    adsSpent = metricMap.adsSpent;
 
                     if (gmv > 0 || units > 0 || adsSpent > 0 || packets > 0) {
                          const avgAsp = units > 0 ? gmv / units : 0;
                          const tacos = gmv > 0 ? adsSpent / gmv : 0;
                          
                          processedData.push({
-                            date: date,
+                            date: date!,
                             channel: platform.name,
                             gmv,
                             units,
@@ -259,9 +257,9 @@ export default function MainView() {
                             adsSpent,
                             avgAsp,
                             tacos,
-                            month: format(date, 'MMM'),
-                            year: format(date, 'yyyy'),
-                            day: format(date, 'd'),
+                            month: format(date!, 'MMM'),
+                            year: format(date!, 'yyyy'),
+                            day: format(date!, 'd'),
                             revenuePerUnit: units > 0 ? gmv / units : 0,
                             adsPerUnit: units > 0 ? adsSpent / units : 0,
                         });
@@ -495,3 +493,5 @@ export default function MainView() {
     </>
   );
 }
+
+    
