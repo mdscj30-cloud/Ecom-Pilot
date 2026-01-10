@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from '@/components/ui/button';
-import { BarChart2, Upload, Cloud, Download, ArrowUp, ArrowDown, ChevronDown, ChevronRight } from "lucide-react";
+import { BarChart2, ArrowUp, ArrowDown, ChevronDown, ChevronRight } from "lucide-react";
 import React, { useMemo, useState } from 'react';
 import type { ProcessedSheetData } from '@/lib/types';
 import KpiCard from '../kpi-card';
@@ -18,8 +18,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Tooltip as UiTooltip, TooltipContent as UiTooltipContent, TooltipProvider, TooltipTrigger as UiTooltipTrigger } from '@/components/ui/tooltip';
-import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { subMonths, startOfMonth, format } from 'date-fns';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -27,8 +25,6 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 
 interface GrowthTabProps {
   data: ProcessedSheetData[] | null;
-  onFileUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
-  onCloudImport: () => void;
 }
 
 const chartConfig = {
@@ -37,14 +33,14 @@ const chartConfig = {
   tacos: { label: "TACOS", color: "hsl(var(--chart-3))",},
 };
 
-const COLORS = ["hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))"];
+const COLORS = ["hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))", "hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))"];
 
 
-type SortKey = 'gmv' | 'adsSpent' | 'tacos' | 'units' | 'mom';
+type SortKey = 'channel' | 'gmv' | 'adsSpent' | 'tacos' | 'units' | 'mom';
 type MonthSortKey = 'month' | 'gmv' | 'adsSpent' | 'tacos' | 'units';
 
 
-export default function GrowthTab({ data, onFileUpload, onCloudImport }: GrowthTabProps) {
+export default function GrowthTab({ data }: GrowthTabProps) {
   const [channelSortConfig, setChannelSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' }>({ key: 'gmv', direction: 'desc' });
   const [monthSortConfig, setMonthSortConfig] = useState<{ key: MonthSortKey; direction: 'asc' | 'desc' }>({ key: 'month', direction: 'desc' });
   const [openCollapsibles, setOpenCollapsibles] = useState<string[]>([]);
@@ -158,7 +154,7 @@ export default function GrowthTab({ data, onFileUpload, onCloudImport }: GrowthT
                 avgAsp: p.units > 0 ? p.gmv / p.units : 0,
             }))
         };
-    }).sort((a,b) => new Date(`${a.month} 1, ${selectedYear}`).getTime() - new Date(`${b.month} 1, ${selectedYear}`).getTime());
+    }).sort((a,b) => new Date(`${a.month} 1, ${selectedYear === 'All' ? '2024' : selectedYear}`).getTime() - new Date(`${b.month} 1, ${selectedYear === 'All' ? '2024' : selectedYear}`).getTime());
 
     const perfData = Object.entries(channelDataMap).map(([channel, metrics]) => ({
       channel,
@@ -169,14 +165,19 @@ export default function GrowthTab({ data, onFileUpload, onCloudImport }: GrowthT
     }));
     
     const sortedChannelPerformance = [...perfData].sort((a, b) => {
-        if (channelSortConfig.direction === 'asc') return a[channelSortConfig.key] - b[channelSortConfig.key];
-        return b[channelSortConfig.key] - a[channelSortConfig.key];
+        if (channelSortConfig.key === 'channel') {
+            return channelSortConfig.direction === 'asc' ? a.channel.localeCompare(b.channel) : b.channel.localeCompare(a.channel);
+        }
+        const valA = a[channelSortConfig.key as keyof typeof a] as number;
+        const valB = b[channelSortConfig.key as keyof typeof b] as number;
+        return channelSortConfig.direction === 'asc' ? valA - valB : valB - valA;
     });
 
     const sortedMonthData = [...monthChartData].sort((a, b) => {
         if (monthSortConfig.key === 'month') {
-            const valA = new Date(`${a.month} 1, ${selectedYear}`).getTime();
-            const valB = new Date(`${b.month} 1, ${selectedYear}`).getTime();
+            const year = selectedYear === 'All' ? '2024' : selectedYear;
+            const valA = new Date(`${a.month} 1, ${year}`).getTime();
+            const valB = new Date(`${b.month} 1, ${year}`).getTime();
             return monthSortConfig.direction === 'asc' ? valA - valB : valB - valA;
         }
         const valA = a[monthSortConfig.key as keyof typeof a] as number;
@@ -200,11 +201,13 @@ export default function GrowthTab({ data, onFileUpload, onCloudImport }: GrowthT
     setMonthSortConfig({ key, direction });
   };
 
-  const getSortIcon = (key: SortKey | MonthSortKey) => {
-    if (channelSortConfig.key === key) return channelSortConfig.direction === 'desc' ? <ArrowDown className="w-3 h-3 ml-1 inline" /> : <ArrowUp className="w-3 h-3 ml-1 inline" />;
-    if (monthSortConfig.key === key) return monthSortConfig.direction === 'desc' ? <ArrowDown className="w-3 h-3 ml-1 inline" /> : <ArrowUp className="w-3 h-3 ml-1 inline" />;
+  const getSortIcon = (key: SortKey | MonthSortKey, type: 'channel' | 'month') => {
+    const config = type === 'channel' ? channelSortConfig : monthSortConfig;
+    if (config.key === key) {
+        return config.direction === 'desc' ? <ArrowDown className="w-3 h-3 ml-1 inline" /> : <ArrowUp className="w-3 h-3 ml-1 inline" />;
+    }
     return null;
-  };
+};
   
   const toggleCollapsible = (month: string) => {
     setOpenCollapsibles(prev => prev.includes(month) ? prev.filter(d => d !== month) : [...prev, month]);
@@ -219,30 +222,13 @@ export default function GrowthTab({ data, onFileUpload, onCloudImport }: GrowthT
               <BarChart2 className="w-5 h-5 text-primary" />
               Growth Analysis
             </div>
-            <div className='flex items-center gap-2'>
-                <Button size="sm" variant="outline" asChild>
-                  <a href="/growth-template.csv" download>
-                    <Download className="w-4 h-4 mr-2" />
-                    Download Template
-                  </a>
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => document.getElementById('growth-upload')?.click()}>
-                    <Upload className="w-4 h-4 mr-2" />
-                    Import from File
-                </Button>
-                <Button size="sm" variant="outline" onClick={onCloudImport}>
-                    <Cloud className="w-4 h-4 mr-2" />
-                    Import from Sheet
-                </Button>
-            </div>
-            <input type="file" id="growth-upload" className="hidden" accept=".xlsx, .xls, .csv" onChange={onFileUpload}/>
           </CardTitle>
           <CardDescription>
-            Import your growth data to see visualizations and analysis.
+            Loading growth data...
           </CardDescription>
         </CardHeader>
         <CardContent className="text-center text-muted-foreground py-16">
-          <p>No growth data loaded. Please import a file.</p>
+          <p>No growth data loaded.</p>
         </CardContent>
       </Card>
     );
@@ -312,11 +298,11 @@ export default function GrowthTab({ data, onFileUpload, onCloudImport }: GrowthT
                         <Table>
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead className="cursor-pointer" onClick={() => requestChannelSort('gmv')}>Channel {getSortIcon('gmv')}</TableHead>
-                                    <TableHead className="text-right">GMV</TableHead>
-                                    <TableHead className="text-right">Ads Spent</TableHead>
-                                    <TableHead className="text-right">TACOS</TableHead>
-                                    <TableHead className="text-right">Units</TableHead>
+                                    <TableHead className="cursor-pointer" onClick={() => requestChannelSort('channel')}>Channel {getSortIcon('channel', 'channel')}</TableHead>
+                                    <TableHead className="cursor-pointer text-right" onClick={() => requestChannelSort('gmv')}>GMV {getSortIcon('gmv', 'channel')}</TableHead>
+                                    <TableHead className="cursor-pointer text-right" onClick={() => requestChannelSort('adsSpent')}>Ads Spent {getSortIcon('adsSpent', 'channel')}</TableHead>
+                                    <TableHead className="cursor-pointer text-right" onClick={() => requestChannelSort('tacos')}>TACOS {getSortIcon('tacos', 'channel')}</TableHead>
+                                    <TableHead className="cursor-pointer text-right" onClick={() => requestChannelSort('units')}>Units {getSortIcon('units', 'channel')}</TableHead>
                                     <TableHead className="text-right">Avg ASP</TableHead>
                                     <TableHead className="text-right">GMV Share %</TableHead>
                                 </TableRow>
@@ -350,7 +336,7 @@ export default function GrowthTab({ data, onFileUpload, onCloudImport }: GrowthT
                                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                 ))}
                             </Pie>
-                             <Legend />
+                             <Legend content={<ChartLegendContent nameKey="channel" />} />
                         </PieChart>
                     </ChartContainer>
                 </CardContent>
@@ -367,11 +353,11 @@ export default function GrowthTab({ data, onFileUpload, onCloudImport }: GrowthT
                     <TableHeader className="sticky top-0 bg-card z-10">
                         <TableRow>
                             <TableHead className="w-12"></TableHead>
-                            <TableHead className="cursor-pointer" onClick={() => requestMonthSort('month')}>Month {getSortIcon('month')}</TableHead>
-                            <TableHead className="cursor-pointer text-right" onClick={() => requestMonthSort('gmv')}>GMV {getSortIcon('gmv')}</TableHead>
-                            <TableHead className="cursor-pointer text-right" onClick={() => requestMonthSort('adsSpent')}>Ads Spent {getSortIcon('adsSpent')}</TableHead>
-                            <TableHead className="cursor-pointer text-right" onClick={() => requestMonthSort('tacos')}>TACOS {getSortIcon('tacos')}</TableHead>
-                            <TableHead className="cursor-pointer text-right" onClick={() => requestMonthSort('units')}>Units {getSortIcon('units')}</TableHead>
+                            <TableHead className="cursor-pointer" onClick={() => requestMonthSort('month')}>Month {getSortIcon('month', 'month')}</TableHead>
+                            <TableHead className="cursor-pointer text-right" onClick={() => requestMonthSort('gmv')}>GMV {getSortIcon('gmv', 'month')}</TableHead>
+                            <TableHead className="cursor-pointer text-right" onClick={() => requestMonthSort('adsSpent')}>Ads Spent {getSortIcon('adsSpent', 'month')}</TableHead>
+                            <TableHead className="cursor-pointer text-right" onClick={() => requestMonthSort('tacos')}>TACOS {getSortIcon('tacos', 'month')}</TableHead>
+                            <TableHead className="cursor-pointer text-right" onClick={() => requestMonthSort('units')}>Units {getSortIcon('units', 'month')}</TableHead>
                             <TableHead className="cursor-pointer text-right">MOM %</TableHead>
                         </TableRow>
                     </TableHeader>
@@ -382,7 +368,7 @@ export default function GrowthTab({ data, onFileUpload, onCloudImport }: GrowthT
                             return (
                                 <Collapsible asChild key={monthKey} open={isOpen} onOpenChange={() => toggleCollapsible(monthKey)}>
                                     <>
-                                        <TableRow className="cursor-pointer">
+                                        <TableRow className="cursor-pointer" onClick={() => toggleCollapsible(monthKey)}>
                                             <TableCell>
                                                 <CollapsibleTrigger asChild>
                                                     <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -414,7 +400,7 @@ export default function GrowthTab({ data, onFileUpload, onCloudImport }: GrowthT
                                                                 </TableRow>
                                                             </TableHeader>
                                                             <TableBody>
-                                                                {item.platforms.map(p => (
+                                                                {item.platforms.sort((a,b) => b.gmv - a.gmv).map(p => (
                                                                     <TableRow key={p.channel}>
                                                                         <TableCell className="font-medium">{p.channel}</TableCell>
                                                                         <TableCell className="text-right">₹{p.gmv.toLocaleString(undefined, {maximumFractionDigits: 0})}</TableCell>
@@ -440,4 +426,5 @@ export default function GrowthTab({ data, onFileUpload, onCloudImport }: GrowthT
     </div>
   );
 }
+
 

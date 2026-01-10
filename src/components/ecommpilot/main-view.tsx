@@ -22,6 +22,7 @@ import type {
   Recommendation
 } from "@/lib/types";
 import { masterData } from "@/lib/data";
+import { growthData as initialGrowthData } from "@/lib/growth-data";
 import { format, parse, isValid, addDays } from 'date-fns';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -49,7 +50,7 @@ export default function MainView() {
   const [activeTab, setActiveTab] = useState<TabId>("daily");
   const [displayData, setDisplayData] = useState<InventoryItem[]>([]);
   const [filteredData, setFilteredData] = useState<InventoryItem[]>([]);
-  const [growthData, setGrowthData] = useState<ProcessedSheetData[] | null>(null);
+  const [growthData, setGrowthData] = useState<ProcessedSheetData[] | null>(initialGrowthData);
   const [dailyData, setDailyData] = useState<ProcessedSheetData[] | null>(null);
 
   // Filters & Thresholds
@@ -108,7 +109,7 @@ export default function MainView() {
         drr: (d.drr_kol||0) + (d.drr_pith||0) + (d.drr_har||0) + (d.drr_blr||0)
     }));
     setDisplayData(processed);
-    setGrowthData(null);
+    setGrowthData(initialGrowthData);
     setDailyData(null);
     toast({ title: "Data Reset", description: "Loaded initial dataset." });
   };
@@ -159,109 +160,99 @@ export default function MainView() {
             
             if (json.length < 2) throw new Error("Sheet must have at least 2 header rows.");
 
-            const platformHeaders = json[0] as (string | null)[];
-            const metricHeaders = json[1] as (string | null)[];
+            const header1 = json[0] as (string | null)[];
+            const header2 = json[1] as (string | null)[];
             const dataRows = json.slice(2);
 
-            const platformDetails: { name: string, startIndex: number, endIndex: number }[] = [];
-            let currentPlatformName: string | null = null;
-            let currentPlatformStartIndex = -1;
-
-            // This logic correctly identifies platforms even when they span multiple columns
-            for (let i = 1; i < platformHeaders.length; i++) {
-                const header = platformHeaders[i];
-                if (header) { // A new platform starts
-                    if (currentPlatformName) { // End the previous platform
-                        platformDetails.push({ name: currentPlatformName, startIndex: currentPlatformStartIndex, endIndex: i - 1 });
+            const platformDetails: { name: string, colSpan: number, startIndex: number, metrics: { [key: string]: number } }[] = [];
+            let currentPlatform: { name: string, colSpan: number, startIndex: number, metrics: { [key: string]: number } } | null = null;
+            
+            for (let i = 1; i < header1.length; i++) {
+                if (header1[i]) {
+                    if (currentPlatform) {
+                        platformDetails.push(currentPlatform);
                     }
-                    // Sanitize platform name
-                    currentPlatformName = header.replace(/^(\d+(\s*and\s*\d+)?\s*of\s+\d+:\s*)/i, '').trim();
-                    currentPlatformStartIndex = i;
+                    const name = (header1[i] as string).replace(/^(\d+(\s*(and|&)\s*\d+)?\s*of\s+\d+:\s*)/i, '').trim();
+                    currentPlatform = { name: name, colSpan: 1, startIndex: i, metrics: {} };
+                } else if (currentPlatform) {
+                    currentPlatform.colSpan++;
                 }
             }
-             // Add the last platform
-            if (currentPlatformName) {
-                platformDetails.push({ name: currentPlatformName, startIndex: currentPlatformStartIndex, endIndex: platformHeaders.length - 1 });
+            if (currentPlatform) {
+                platformDetails.push(currentPlatform);
             }
-            
+
+            platformDetails.forEach(platform => {
+                for (let i = 0; i < platform.colSpan; i++) {
+                    const metricName = header2[platform.startIndex + i]?.toLowerCase().trim();
+                    if (metricName) {
+                        platform.metrics[metricName] = platform.startIndex + i;
+                    }
+                }
+            });
+
             const processedData: ProcessedSheetData[] = [];
+            const excelEpoch = new Date(1899, 11, 30);
 
             dataRows.forEach(row => {
                 const dateRaw = row[0];
-                if (dateRaw === null || dateRaw === undefined) return;
+                if (!dateRaw) return;
 
                 let date: Date | null = null;
-                 // Handle Excel's epoch for serial numbers
-                const excelEpoch = new Date(1899, 11, 30);
                 if (typeof dateRaw === 'number') {
-                    if (dateRaw > 60) { // Excel serial number is a number of days since 1/1/1900
-                       date = addDays(excelEpoch, dateRaw -1);
-                    } else { // It's probably just a day of the month, needs context
-                        // This case is ambiguous without a full date context, so we'll skip
-                    }
+                    date = addDays(excelEpoch, dateRaw - 1);
                 } else if (typeof dateRaw === 'string') {
-                    const formats = ["dd-MMM-yy", "dd-MMM", "MM/dd/yy", "M/d/yy", "MMM'yy", "MMMM d, yyyy", "yyyy-MM-dd"];
-                    let parsedDate: Date | null = null;
+                     const formats = ["dd-MMM-yy", "dd-MMM", "MM/dd/yy", "M/d/yy", "MMM'yy", "MMMM d, yyyy", "yyyy-MM-dd"];
                     for (const fmt of formats) {
-                        const d = parse(dateRaw, fmt, new Date());
-                        if (isValid(d)) {
-                            parsedDate = d;
+                        const parsedDate = parse(dateRaw, fmt, new Date());
+                        if (isValid(parsedDate)) {
+                            date = parsedDate;
                             break;
                         }
                     }
-                    date = parsedDate;
-
-                    if (!date && /^\d{5}$/.test(dateRaw)) { // Handle 5-digit excel date string
-                        date = addDays(excelEpoch, parseInt(dateRaw, 10)-1);
+                    if (!date && /^\d{5}$/.test(dateRaw)) {
+                        date = addDays(excelEpoch, parseInt(dateRaw, 10) - 1);
                     }
                 }
-                
+
                 if (!date || !isValid(date)) return;
 
                 platformDetails.forEach(platform => {
-                    const metricMap: { [key: string]: number } = { gmv: 0, units: 0, packets: 0, adsSpent: 0 };
-                    let hasDataForPlatform = false;
-
-                    for (let colIndex = platform.startIndex; colIndex <= platform.endIndex; colIndex++) {
-                        const metricHeader = metricHeaders[colIndex]?.toLowerCase().trim();
-                        let value = row[colIndex];
-
-                        if (value === null || value === undefined || value === '-' || value === '' || !metricHeader) continue;
-                        
-                        // Handle cases where value might be a formatted string like "₹1,23,456" or a number
+                    const getValue = (metric: string) => {
+                        const colIndex = platform.metrics[metric];
+                        if (colIndex === undefined) return 0;
+                        const value = row[colIndex];
+                        if (value === null || value === undefined || value === '-' || value === '') return 0;
                         const numValue = typeof value === 'string' 
                             ? parseFloat(value.replace(/[,₹]/g, '')) 
                             : typeof value === 'number' ? value : 0;
+                        return isNaN(numValue) ? 0 : numValue;
+                    };
+                    
+                    const gmv = getValue('gmv');
+                    const units = getValue('units');
+                    const packets = getValue('packets');
+                    const adsSpent = getValue('ads spent');
+                    
+                    if (gmv > 0 || units > 0 || packets > 0 || adsSpent > 0) {
+                        const avgAsp = units > 0 ? gmv / units : 0;
+                        const tacos = gmv > 0 ? adsSpent / gmv : 0;
                         
-                        if (isNaN(numValue)) continue;
-                        hasDataForPlatform = true;
-
-                        if (metricHeader.includes('gmv')) metricMap.gmv += numValue;
-                        else if (metricHeader.includes('units')) metricMap.units += numValue;
-                        else if (metricHeader.includes('packets')) metricMap.packets += numValue;
-                        else if (metricHeader.includes('ads spent')) metricMap.adsSpent += numValue;
-                    }
-
-                    if (hasDataForPlatform) {
-                         const { gmv, units, packets, adsSpent } = metricMap;
-                         const avgAsp = units > 0 ? gmv / units : 0;
-                         const tacos = gmv > 0 ? adsSpent / gmv : 0;
-                         
-                         processedData.push({
-                            date: date,
-                            channel: platform.name,
-                            gmv,
-                            units,
-                            packets,
-                            adsSpent,
-                            avgAsp,
-                            tacos,
-                            month: format(date, 'MMM'),
-                            year: format(date, 'yyyy'),
-                            day: format(date, 'd'),
-                            revenuePerUnit: units > 0 ? gmv / units : 0,
-                            adsPerUnit: units > 0 ? adsSpent / units : 0,
-                        });
+                        processedData.push({
+                           date: date as Date,
+                           channel: platform.name,
+                           gmv,
+                           units,
+                           packets,
+                           adsSpent,
+                           avgAsp,
+                           tacos,
+                           month: format(date as Date, 'MMM'),
+                           year: format(date as Date, 'yyyy'),
+                           day: format(date as Date, 'd'),
+                           revenuePerUnit: units > 0 ? gmv / units : 0,
+                           adsPerUnit: units > 0 ? adsSpent / units : 0,
+                       });
                     }
                 });
             });
@@ -413,8 +404,6 @@ export default function MainView() {
         <TabsContent value="growth">
              <GrowthTab 
                 data={growthData} 
-                onFileUpload={(e) => handleFileUpload(e, 'growth')} 
-                onCloudImport={() => openCloudImport('growth')}
              />
         </TabsContent>
         <TabsContent value="dailypnl">
