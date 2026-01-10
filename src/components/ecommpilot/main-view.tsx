@@ -22,7 +22,7 @@ import type {
   Recommendation
 } from "@/lib/types";
 import { masterData } from "@/lib/data";
-import { format, parse, isValid } from 'date-fns';
+import { format, parse, isValid, addDays } from 'date-fns';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -155,53 +155,64 @@ export default function MainView() {
             }));
             setDisplayData(processed as InventoryItem[]);
         } else if (type === 'growth' || type === 'daily') {
-            const json = XLSX.utils.sheet_to_json<any>(worksheet, { header: 1, defval: "" });
+            const json = XLSX.utils.sheet_to_json<any>(worksheet, { header: 1, defval: null });
             
             if (json.length < 2) throw new Error("Sheet must have at least 2 header rows.");
 
-            const platformHeaders = json[0] as string[];
-            const metricHeaders = json[1] as string[];
+            const platformHeaders = json[0] as (string | null)[];
+            const metricHeaders = json[1] as (string | null)[];
             const dataRows = json.slice(2);
 
             const platformDetails: { name: string, startIndex: number, endIndex: number }[] = [];
-            let currentPlatform: { name: string, startIndex: number } | null = null;
-            
+            let currentPlatformName: string | null = null;
+            let currentPlatformStartIndex = -1;
+
+            // This logic correctly identifies platforms even when they span multiple columns
             for (let i = 1; i < platformHeaders.length; i++) {
-                const header = platformHeaders[i]?.trim();
-                if (header) {
-                    if (currentPlatform) {
-                        platformDetails.push({ ...currentPlatform, endIndex: i - 1 });
+                const header = platformHeaders[i];
+                if (header) { // A new platform starts
+                    if (currentPlatformName) { // End the previous platform
+                        platformDetails.push({ name: currentPlatformName, startIndex: currentPlatformStartIndex, endIndex: i - 1 });
                     }
-                    const platformName = header.replace(/^(\d+(\s*and\s*\d+)?\s*of\s+\d+:\s*)/i, '').trim();
-                    currentPlatform = { name: platformName, startIndex: i };
+                    // Sanitize platform name
+                    currentPlatformName = header.replace(/^(\d+(\s*and\s*\d+)?\s*of\s+\d+:\s*)/i, '').trim();
+                    currentPlatformStartIndex = i;
                 }
             }
-            if (currentPlatform) {
-                platformDetails.push({ ...currentPlatform, endIndex: platformHeaders.length - 1 });
+             // Add the last platform
+            if (currentPlatformName) {
+                platformDetails.push({ name: currentPlatformName, startIndex: currentPlatformStartIndex, endIndex: platformHeaders.length - 1 });
             }
             
             const processedData: ProcessedSheetData[] = [];
 
             dataRows.forEach(row => {
                 const dateRaw = row[0];
-                if (!dateRaw) return;
+                if (dateRaw === null || dateRaw === undefined) return;
 
                 let date: Date | null = null;
-                if (typeof dateRaw === 'number' && dateRaw > 1) { // Excel date serial number
-                    const excelEpoch = new Date(Date.UTC(1899, 11, 30));
-                    date = new Date(excelEpoch.getTime() + (dateRaw - 1) * 86400000);
+                 // Handle Excel's epoch for serial numbers
+                const excelEpoch = new Date(1899, 11, 30);
+                if (typeof dateRaw === 'number') {
+                    if (dateRaw > 60) { // Excel serial number is a number of days since 1/1/1900
+                       date = addDays(excelEpoch, dateRaw -1);
+                    } else { // It's probably just a day of the month, needs context
+                        // This case is ambiguous without a full date context, so we'll skip
+                    }
                 } else if (typeof dateRaw === 'string') {
-                    const formats = ["dd-MMM-yy", "dd-MMM", "yyyy-MM-dd", "MM/dd/yy", "M/d/yy", "MMM'yy", "MMMM", "MMM yyyy"];
+                    const formats = ["dd-MMM-yy", "dd-MMM", "MM/dd/yy", "M/d/yy", "MMM'yy", "MMMM d, yyyy", "yyyy-MM-dd"];
+                    let parsedDate: Date | null = null;
                     for (const fmt of formats) {
                         const d = parse(dateRaw, fmt, new Date());
                         if (isValid(d)) {
-                            date = d;
+                            parsedDate = d;
                             break;
                         }
                     }
-                     if (!date && /^\d{5}$/.test(dateRaw)) { // Handle 5-digit excel date string
-                        const excelEpoch = new Date(Date.UTC(1899, 11, 30));
-                        date = new Date(excelEpoch.getTime() + (parseInt(dateRaw, 10) -1) * 86400000);
+                    date = parsedDate;
+
+                    if (!date && /^\d{5}$/.test(dateRaw)) { // Handle 5-digit excel date string
+                        date = addDays(excelEpoch, parseInt(dateRaw, 10)-1);
                     }
                 }
                 
@@ -209,18 +220,21 @@ export default function MainView() {
 
                 platformDetails.forEach(platform => {
                     const metricMap: { [key: string]: number } = { gmv: 0, units: 0, packets: 0, adsSpent: 0 };
-                    let hasData = false;
+                    let hasDataForPlatform = false;
 
                     for (let colIndex = platform.startIndex; colIndex <= platform.endIndex; colIndex++) {
                         const metricHeader = metricHeaders[colIndex]?.toLowerCase().trim();
-                        const value = row[colIndex];
+                        let value = row[colIndex];
 
                         if (value === null || value === undefined || value === '-' || value === '' || !metricHeader) continue;
-
-                        const numValue = (typeof value === 'string') ? parseFloat(value.replace(/[,₹]/g, '')) : (typeof value === 'number' ? value : 0);
-
+                        
+                        // Handle cases where value might be a formatted string like "₹1,23,456" or a number
+                        const numValue = typeof value === 'string' 
+                            ? parseFloat(value.replace(/[,₹]/g, '')) 
+                            : typeof value === 'number' ? value : 0;
+                        
                         if (isNaN(numValue)) continue;
-                        hasData = true;
+                        hasDataForPlatform = true;
 
                         if (metricHeader.includes('gmv')) metricMap.gmv += numValue;
                         else if (metricHeader.includes('units')) metricMap.units += numValue;
@@ -228,7 +242,7 @@ export default function MainView() {
                         else if (metricHeader.includes('ads spent')) metricMap.adsSpent += numValue;
                     }
 
-                    if (hasData) {
+                    if (hasDataForPlatform) {
                          const { gmv, units, packets, adsSpent } = metricMap;
                          const avgAsp = units > 0 ? gmv / units : 0;
                          const tacos = gmv > 0 ? adsSpent / gmv : 0;
@@ -450,5 +464,7 @@ export default function MainView() {
     </>
   );
 }
+
+    
 
     
