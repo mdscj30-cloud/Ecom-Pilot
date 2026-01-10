@@ -17,16 +17,16 @@ export async function GET(request: NextRequest) {
     
     // Set CORS headers to allow requests from your app's origin
     const headers = new Headers();
-    headers.set('Access-Control-Allow-Origin', '*'); // Adjust this to your domain in production for better security
+    headers.set('Access-Control-Allow-Origin', '*'); 
     headers.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
     headers.set('Access-Control-Allow-Headers', 'Content-Type');
 
+    // Google Sheets CSV links return text/csv
+    headers.set('Content-Type', 'text/csv');
+
     return new NextResponse(data, {
         status: 200,
-        headers: {
-            'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            ...headers,
-        }
+        headers: headers,
     });
 
   } catch (error) {
