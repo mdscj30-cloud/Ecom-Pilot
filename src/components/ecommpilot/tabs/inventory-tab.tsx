@@ -37,16 +37,31 @@ interface InventoryTabProps {
 export default function InventoryTab({ data, searchTerm, onFileUpload, onCloudImport }: InventoryTabProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("units");
 
-  const inventoryData = data;
+  const filteredInventoryData = useMemo(() => {
+    return data.filter((item) => {
+      return searchTerm ? item.name.toLowerCase().includes(searchTerm.toLowerCase()) : true;
+    });
+  }, [data, searchTerm]);
 
   const kpis = useMemo<InventoryKpi>(() => {
-    return inventoryData.reduce(
+    let totalStock = 0;
+    let totalDrr = 0;
+    
+    const result = filteredInventoryData.reduce(
       (acc, item) => {
         const totalLocStock = (item.stock_kol || 0) + (item.stock_pith || 0) + (item.stock_har || 0) + (item.stock_blr || 0);
-        const globalCover = item.drr > 0 ? totalLocStock / item.drr : 999;
+        const globalCover = item.drr > 0 ? totalLocStock / item.drr : 0;
+        
         acc.sellableValue += totalLocStock * item.price;
-        if (globalCover > 30) acc.stuckCapital += totalLocStock * item.price;
-        if (globalCover < 5) acc.stockouts++;
+        
+        if (globalCover > 40 && item.drr > 0) { // Overstocked logic for Stuck Capital
+            const excessStock = (globalCover - 40) * item.drr;
+            acc.stuckCapital += excessStock * item.price;
+        }
+
+        if (globalCover < 8) { // Stockout logic
+             acc.stockouts++;
+        }
         
         const deficit = ["kol", "pith", "har", "blr"].reduce((sum, loc) => {
             const stock = item[`stock_${loc}`] || 0;
@@ -55,11 +70,17 @@ export default function InventoryTab({ data, searchTerm, onFileUpload, onCloudIm
         }, 0);
         acc.capitalNeeded += deficit * item.price;
         
+        totalStock += totalLocStock;
+        totalDrr += item.drr;
+
         return acc;
       },
       { sellableValue: 0, capitalNeeded: 0, avgCover: 0, stockouts: 0, stuckCapital: 0 }
     );
-  }, [inventoryData]);
+
+    result.avgCover = totalDrr > 0 ? totalStock / totalDrr : 0;
+    return result;
+  }, [filteredInventoryData]);
 
   const renderCell = (stock: number, drr: number, price: number, view: ViewMode) => {
     const deficit = Math.max(0, (drr * 15) - stock);
@@ -71,7 +92,7 @@ export default function InventoryTab({ data, searchTerm, onFileUpload, onCloudIm
                 : <span className="text-green-600 font-bold bg-green-600/10 p-1 rounded">OK</span>;
         case 'days':
             const days = drr > 0 ? stock / drr : 999;
-            const colorClass = days < 5 ? 'text-destructive font-bold' : days > 30 ? 'text-muted-foreground' : 'text-green-600';
+            const colorClass = days < 8 ? 'text-destructive font-bold' : days > 40 ? 'text-amber-600' : 'text-green-600';
             return <span className={colorClass}>{days === 999 ? '∞' : `${Math.round(days)}d`}</span>;
         case 'value':
             return `₹${Math.round(stock * price / 1000)}k`;
@@ -79,12 +100,6 @@ export default function InventoryTab({ data, searchTerm, onFileUpload, onCloudIm
             return stock;
     }
   };
-  
-  const filteredInventoryData = useMemo(() => {
-    return inventoryData.filter((item) => {
-      return searchTerm ? item.name.toLowerCase().includes(searchTerm.toLowerCase()) : true;
-    });
-  }, [inventoryData, searchTerm]);
 
 
   return (
@@ -92,9 +107,9 @@ export default function InventoryTab({ data, searchTerm, onFileUpload, onCloudIm
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <KpiCard title="Sellable Value" value={`₹${(kpis.sellableValue/100000).toFixed(2)} L`} className="text-green-600" />
         <KpiCard title="Need (15d Cover)" value={`₹${(kpis.capitalNeeded/100000).toFixed(2)} L`} className="text-primary" />
-        <KpiCard title="Avg Cover" value="0 Days" className="text-primary" />
-        <KpiCard title="Stockouts" value={`${kpis.stockouts} SKUs`} className="text-destructive" />
-        <KpiCard title="Stuck Capital" value={`₹${(kpis.stuckCapital/100000).toFixed(2)} L`} className="text-amber-600" />
+        <KpiCard title="Avg Cover" value={`${Math.round(kpis.avgCover)} Days`} className="text-primary" />
+        <KpiCard title="Stockouts (<8d)" value={`${kpis.stockouts} SKUs`} className="text-destructive" />
+        <KpiCard title="Stuck Capital (>40d)" value={`₹${(kpis.stuckCapital/100000).toFixed(2)} L`} className="text-amber-600" />
       </div>
 
       <div className="flex justify-between gap-3 mb-4 bg-card p-2.5 rounded-xl border items-center">
@@ -148,11 +163,11 @@ export default function InventoryTab({ data, searchTerm, onFileUpload, onCloudIm
             <CardHeader><CardTitle className="text-sm font-bold text-primary">Daily Inventory SOP</CardTitle></CardHeader>
             <CardContent>
                 <ul className="space-y-3 text-xs text-muted-foreground">
-                    <li className="flex items-start gap-2"><span className="text-primary mt-1">1.</span> Pause Ads for SKUs with <b className="text-destructive">&lt; 2 Days</b> cover.</li>
-                    <li className="flex items-start gap-2"><span className="text-primary mt-1">2.</span> Check winners (DRR↑) with falling stock.</li>
-                    <li className="flex items-start gap-2"><span className="text-primary mt-1">3.</span> Flag <b>Ads Mismatch</b> (Active but Stock &lt; 7d).</li>
-                    <li className="flex items-start gap-2"><span className="text-primary mt-1">4.</span> Raise PO if <b>Days to Reorder ≤ 3</b>.</li>
-                    <li className="flex items-start gap-2"><span className="text-primary mt-1">5.</span> Review unallocated stock for urgent transfers.</li>
+                    <li className="flex items-start gap-2"><span className="text-primary mt-1">1.</span> Identify <b className="text-destructive">Critical</b> SKUs (&lt; 8 days cover). Pause Ads if active.</li>
+                    <li className="flex items-start gap-2"><span className="text-primary mt-1">2.</span> Review <b className="text-amber-600">Overstocked</b> SKUs (&gt; 40 days). Plan promotions or reduce reorders.</li>
+                    <li className="flex items-start gap-2"><span className="text-primary mt-1">3.</span> Check for <b className="text-green-600">Healthy</b> SKUs (8-40 days) to ensure stable sales.</li>
+                    <li className="flex items-start gap-2"><span className="text-primary mt-1">4.</span> Monitor <b className="text-slate-500">Slow Moving</b> items (low DRR) for potential liquidation.</li>
+                    <li className="flex items-start gap-2"><span className="text-primary mt-1">5.</span> Raise PO if <b>Days to Reorder ≤ 3</b>.</li>
                 </ul>
             </CardContent>
         </Card>
@@ -192,10 +207,17 @@ export default function InventoryTab({ data, searchTerm, onFileUpload, onCloudIm
                         {filteredInventoryData.map(item => {
                             const totalLocStock = (item.stock_kol || 0) + (item.stock_pith || 0) + (item.stock_har || 0) + (item.stock_blr || 0);
                             const globalCover = item.drr > 0 ? totalLocStock / item.drr : 999;
-                            const rop = Math.ceil(item.drr * 10);
+                            const rop = Math.ceil(item.drr * 10); // Reorder point at 10 days of stock
                             const daysToRop = item.drr > 0 ? Math.round((totalLocStock - rop) / item.drr) : 99;
                             const totalDeficit = ["kol", "pith", "har", "blr"].reduce((sum, loc) => sum + Math.max(0, (item[`drr_${loc}`] || 0) * 15 - (item[`stock_${loc}`] || 0)), 0);
                             
+                            const getStatus = () => {
+                                if (item.drr === 0 && totalLocStock > 0) return <span className="text-slate-500 font-bold">Slow Moving</span>;
+                                if (globalCover < 8) return <span className="text-destructive font-bold animate-pulse">Critical</span>;
+                                if (globalCover > 40) return <span className="text-amber-600 font-bold">Overstocked</span>;
+                                return <span className="text-green-600 font-bold">Healthy</span>;
+                            };
+
                             return (
                                 <TableRow key={item.id}>
                                     <TableCell className="sticky-col bg-card border-r font-medium text-foreground">{item.name}</TableCell>
@@ -206,9 +228,9 @@ export default function InventoryTab({ data, searchTerm, onFileUpload, onCloudIm
                                     <TableCell className="text-center font-bold text-foreground">{Math.round(globalCover)}d</TableCell>
                                     <TableCell className="text-center text-lg">{item.id % 2 === 0 ? <ArrowUp className="w-4 h-4 mx-auto text-green-500" /> : <ArrowDown className="w-4 h-4 mx-auto text-red-400" />}</TableCell>
                                     <TableCell className="text-center text-muted-foreground">{rop}</TableCell>
-                                    <TableCell className={`text-center font-bold ${daysToRop < 5 ? 'text-destructive' : ''}`}>{daysToRop}d</TableCell>
+                                    <TableCell className={`text-center font-bold ${daysToRop < 3 ? 'text-destructive' : ''}`}>{daysToRop < 0 ? 0 : daysToRop}d</TableCell>
                                     <TableCell className="text-center text-[10px] border-r">
-                                        {daysToRop < 3 ? <span className="text-destructive font-bold animate-pulse">CRITICAL</span> : daysToRop < 7 ? <span className="text-amber-600 font-bold">Order Now</span> : <span className="text-green-600 font-bold">Safe</span>}
+                                        {getStatus()}
                                     </TableCell>
                                     <TableCell className="text-center bg-yellow-500/10">
                                         <div className="flex flex-col text-[10px]">
@@ -227,3 +249,5 @@ export default function InventoryTab({ data, searchTerm, onFileUpload, onCloudIm
     </div>
   );
 }
+
+    
