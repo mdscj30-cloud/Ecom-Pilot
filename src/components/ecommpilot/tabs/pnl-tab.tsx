@@ -1,10 +1,11 @@
+
 "use client";
 
 import { Bar, ComposedChart, XAxis, YAxis, CartesianGrid, Legend, Tooltip } from 'recharts';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
 import { Button } from '@/components/ui/button';
-import { Calendar as CalendarIcon, Upload, Cloud, Download, AlertTriangle, CheckCircle } from "lucide-react";
+import { Calendar as CalendarIcon, Upload, Cloud, Download, AlertTriangle, CheckCircle, ArrowUp, ArrowDown } from "lucide-react";
 import React, { useMemo, useState } from 'react';
 import type { ProcessedSheetData } from '@/lib/types';
 import {
@@ -18,7 +19,7 @@ import {
 import { Tooltip as UiTooltip, TooltipContent as UiTooltipContent, TooltipProvider, TooltipTrigger as UiTooltipTrigger } from '@/components/ui/tooltip';
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { format, subDays, startOfToday, startOfYesterday } from 'date-fns';
+import { format, subDays, startOfToday } from 'date-fns';
 import KpiCard from '../kpi-card';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
@@ -34,8 +35,11 @@ const chartConfig = {
   adsSpent: { label: "Ads Spent", color: "hsl(var(--chart-2))" },
 };
 
+type SortKey = 'gmv' | 'ads' | 'tacos' | 'units' | 'avgAsp' | 'deltaVsYesterday';
+
 export default function PnlTab({ data, onFileUpload, onCloudImport }: PnlTabProps) {
   const [selectedDate, setSelectedDate] = useState<Date>(startOfToday());
+  const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' }>({ key: 'gmv', direction: 'desc' });
 
   const { todayData, yesterdayData } = useMemo(() => {
     if (!data) return { todayData: null, yesterdayData: null };
@@ -102,9 +106,29 @@ export default function PnlTab({ data, onFileUpload, onCloudImport }: PnlTabProp
       };
     });
 
-    return { dailyKpis: kpis, dailyChannelPerformance: performance, dailyChartData: performance };
-  }, [todayData, yesterdayData, data, selectedDate]);
+    const sortedPerformance = [...performance].sort((a, b) => {
+        if (sortConfig.direction === 'asc') {
+            return a[sortConfig.key] - b[sortConfig.key];
+        }
+        return b[sortConfig.key] - a[sortConfig.key];
+    });
 
+
+    return { dailyKpis: kpis, dailyChannelPerformance: sortedPerformance, dailyChartData: performance };
+  }, [todayData, yesterdayData, data, selectedDate, sortConfig]);
+
+  const requestSort = (key: SortKey) => {
+    let direction: 'asc' | 'desc' = 'desc';
+    if (sortConfig.key === key && sortConfig.direction === 'desc') {
+        direction = 'asc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const getSortIcon = (key: SortKey) => {
+    if (sortConfig.key !== key) return null;
+    return sortConfig.direction === 'desc' ? <ArrowDown className="w-3 h-3 ml-1" /> : <ArrowUp className="w-3 h-3 ml-1" />;
+  };
 
   if (!data) {
     return (
@@ -177,7 +201,7 @@ export default function PnlTab({ data, onFileUpload, onCloudImport }: PnlTabProp
                                     <a href="/pnl-template.csv" download><Download className="w-4 h-4" /></a>
                                 </Button>
                             </UiTooltipTrigger>
-                            <UiTooltipContent>Download Template</UiTooltipContent>
+                            <UiTooltipContent><p>Download Template</p></UiTooltipContent>
                         </UiTooltip>
                         <UiTooltip>
                             <UiTooltipTrigger asChild>
@@ -185,7 +209,7 @@ export default function PnlTab({ data, onFileUpload, onCloudImport }: PnlTabProp
                                     <Upload className="w-4 h-4" />
                                 </Button>
                             </UiTooltipTrigger>
-                            <UiTooltipContent>Import from file</UiTooltipContent>
+                            <UiTooltipContent><p>Import from file</p></UiTooltipContent>
                         </UiTooltip>
                         <UiTooltip>
                             <UiTooltipTrigger asChild>
@@ -193,7 +217,7 @@ export default function PnlTab({ data, onFileUpload, onCloudImport }: PnlTabProp
                                     <Cloud className="w-4 h-4" />
                                 </Button>
                             </UiTooltipTrigger>
-                            <UiTooltipContent>Import from Google Sheet</UiTooltipContent>
+                            <UiTooltipContent><p>Import from Google Sheet</p></UiTooltipContent>
                         </UiTooltip>
                     </TooltipProvider>
                     <input type="file" id="daily-upload" className="hidden" accept=".xlsx, .xls, .csv" onChange={onFileUpload}/>
@@ -229,15 +253,15 @@ export default function PnlTab({ data, onFileUpload, onCloudImport }: PnlTabProp
                     </ComposedChart>
                   </ChartContainer>
                 </div>
-                <div className="overflow-x-auto">
-                    <h3 className="text-sm font-semibold mb-2">Alerts &amp; Performance vs Yesterday</h3>
+                <div className="overflow-x-auto custom-scrollbar">
+                    <h3 className="text-sm font-semibold mb-2">Performance vs Yesterday</h3>
                     <Table>
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Channel</TableHead>
-                                <TableHead>GMV</TableHead>
-                                <TableHead>TACOS</TableHead>
-                                <TableHead>Δ vs Yday</TableHead>
+                                <TableHead className="cursor-pointer" onClick={() => requestSort('gmv')}>GMV {getSortIcon('gmv')}</TableHead>
+                                <TableHead className="cursor-pointer" onClick={() => requestSort('tacos')}>TACOS {getSortIcon('tacos')}</TableHead>
+                                <TableHead className="cursor-pointer" onClick={() => requestSort('deltaVsYesterday')}>Δ vs Yday {getSortIcon('deltaVsYesterday')}</TableHead>
                                 <TableHead>Alerts</TableHead>
                             </TableRow>
                         </TableHeader>
