@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
@@ -56,206 +55,216 @@ export default function MainView() {
   // Filters & Thresholds
   const [currentChannel, setCurrentChannel] = useState<Channel>("All");
   const [searchTerm, setSearchTerm] = useState("");
-  const [sortConfig, setSortConfig] = useState<SortConfig>({ column: null, direction: "desc" });
-  const [roasThreshold, setRoasThreshold] = useState(3.0);
-  
-  // UI State
-  const [isClient, setIsClient] = useState(false);
-  const [alerts, setAlerts] = useState<string[]>([]);
+  const [sortConfig, setSortConfig] = useState<SortConfig>({ column: 'name', direction: 'asc' });
+  const [roasThreshold, setRoasThreshold] = useState(1.5);
+  const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
+
+  // Modals
   const [isModalOpen, setModalOpen] = useState(false);
   const [isAddSkuModalOpen, setAddSkuModalOpen] = useState(false);
   const [pendingCloudType, setPendingCloudType] = useState<TabId | null>(null);
 
-  
-  // === DATA PROCESSING & CALCULATIONS ===
+  const [isClient, setIsClient] = useState(false);
+  useEffect(() => {
+    setIsClient(true);
+    initializeData();
+  }, []);
+
+  // === DATA INITIALIZATION & RESET ===
+  const initializeData = useCallback(() => {
+    setDisplayData(masterData);
+    setGrowthData(initialGrowthData.length > 0 ? initialGrowthData : null);
+    setDailyData(null);
+  }, []);
+
+  const handleReset = () => {
+    initializeData();
+    setSearchTerm("");
+    setCurrentChannel("All");
+    setRoasThreshold(1.5);
+    toast({ title: "View Reset", description: "All data has been reset to its initial state." });
+  };
+
+  // === DERIVED DATA & FILTERING ===
+  const alerts = useMemo(() => {
+    return filteredData
+      .map(item => {
+        const stockTotal = (item.stock_kol || 0) + (item.stock_pith || 0) + (item.stock_har || 0) + (item.stock_blr || 0);
+        const stockDays = item.drr > 0 ? stockTotal / item.drr : 999;
+        if (stockDays < 5) return `Critical stock for ${item.name} (${Math.round(stockDays)} days left).`;
+        if (item.ads_active && stockDays < 7) return `Turn off ads for ${item.name} (low stock).`;
+        return null;
+      })
+      .filter((alert): alert is string => alert !== null)
+      .slice(0, 3);
+  }, [filteredData]);
+
   const kpis = useMemo<Kpi>(() => {
-    return (filteredData || []).reduce(
+    return filteredData.reduce(
       (acc, item) => {
-        const revenue = (item.price || 0) * (item.orders || 0);
-        acc.revenue += revenue;
-        acc.spend += item.spend || 0;
+        acc.revenue += item.price * item.orders;
+        acc.spend += item.spend;
         acc.stock += (item.stock_kol || 0) + (item.stock_pith || 0) + (item.stock_har || 0) + (item.stock_blr || 0);
         return acc;
       },
       { revenue: 0, spend: 0, stock: 0, skus: filteredData.length }
     );
   }, [filteredData]);
-  
-  // === EFFECTS ===
-  useEffect(() => {
-    setIsClient(true);
-    resetData();
-  }, []);
 
   useEffect(() => {
-    let newFilteredData =
+    const channelFiltered =
       currentChannel === "All"
         ? displayData
-        : displayData.filter((item) => item.channel === currentChannel);
+        : displayData.filter(
+            (item) => item.channel.toLowerCase() === currentChannel.toLowerCase()
+          );
 
-    if (searchTerm) {
-      newFilteredData = newFilteredData.filter((item) =>
-        item.name.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-    
-    setFilteredData(newFilteredData);
-  }, [displayData, currentChannel, searchTerm]);
-  
-  // === HANDLERS ===
-  const resetData = () => {
-    const processed = masterData.map(d => ({
-        ...d,
-        drr: (d.drr_kol||0) + (d.drr_pith||0) + (d.drr_har||0) + (d.drr_blr||0)
-    }));
-    setDisplayData(processed);
-    setGrowthData(null);
-    setDailyData(null);
-    toast({ title: "Data Reset", description: "Loaded initial dataset." });
-  };
-  
-  const processSheetData = (data: ArrayBuffer, type: 'inventory' | 'growth' | 'daily') => {
+    const searchFiltered = channelFiltered.filter((item) =>
+      item.name.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    setFilteredData(searchFiltered);
+  }, [searchTerm, currentChannel, displayData]);
+
+
+  // === DATA PROCESSING & IMPORT ===
+  const processSheetData = (
+    data: ArrayBuffer,
+    type: 'inventory' | 'growth' | 'daily'
+  ) => {
     try {
-        const workbook = XLSX.read(data, { type: "array" });
-        const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName];
-        
-        if (type === 'inventory') {
-            const jsonData = XLSX.utils.sheet_to_json<any>(worksheet);
-            const mapped = jsonData.map((item, idx) => ({ 
-                id: item.id || Date.now() + idx, 
-                name: item['SKU Name'] || 'Unnamed SKU',
-                channel: item['Channel'] || 'General',
-                price: parseFloat(item['Price'])||0, 
-                shipping: parseFloat(item['Shipping'])||0, 
-                commission: parseFloat(item['Commission'])||0,
-                stock_kol: parseInt(item['Kol Stock'])||0, 
-                drr_kol: parseInt(item['Kol DRR'])||0,
-                stock_pith: parseInt(item['Pith Stock'])||0,
-                drr_pith: parseInt(item['Pith DRR'])||0,
-                stock_har: parseInt(item['Har Stock'])||0,
-                drr_har: parseInt(item['Har DRR'])||0,
-                stock_blr: parseInt(item['Blr Stock'])||0,
-                drr_blr: parseInt(item['Blr DRR'])||0,
-                stock_unalloc: parseInt(item['Unalloc Stock'] || item['Unalloc']) || 0,
-                stock_factory: parseInt(item['Factory Stock'] || item['Factory']) || 0,
-                stock_wip: parseInt(item['WIP Stock'] || item['WIP']) || 0,
-                spend: parseFloat(item['Ad Spend'])||0, 
-                orders: parseInt(item['Orders'])||0, 
-                returns: parseInt(item['Returns'])||0,
-                impr: parseInt(item['Impressions']) || 0,
-                clicks: parseInt(item['Clicks']) || 0,
-                ads_active: !!item['Ads Active'],
-                rating: parseFloat(item['Rating']) || 0, 
-                reviews: parseInt(item['Reviews']) || 0,
-                type: 'B2C'
-            }));
-            const processed = mapped.map(d => ({
-                ...d,
-                drr: (d.drr_kol||0) + (d.drr_pith||0) + (d.drr_har||0) + (d.drr_blr||0)
-            }));
-            setDisplayData(processed as InventoryItem[]);
-        } else if (type === 'growth' || type === 'daily') {
-            const json = XLSX.utils.sheet_to_json<any>(worksheet, { header: 1, defval: null });
-            
-            if (json.length < 2) throw new Error("Sheet must have at least 2 header rows.");
+      const workbook = XLSX.read(data, { type: "array" });
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      const json = XLSX.utils.sheet_to_json<any>(worksheet, { header: 1 });
 
-            const header1 = json[0] as (string | null)[];
-            const header2 = json[1] as (string | null)[];
-            const dataRows = json.slice(2);
-
-            const platformDetails: { name: string, colSpan: number, startIndex: number, metrics: { [key: string]: number } }[] = [];
-            let currentPlatform: { name: string, colSpan: number, startIndex: number, metrics: { [key: string]: number } } | null = null;
-            
-            for (let i = 1; i < header1.length; i++) {
-                if (header1[i]) {
-                    if (currentPlatform) {
-                        platformDetails.push(currentPlatform);
-                    }
-                    const name = (header1[i] as string).replace(/^(\d+(\s*(and|&)\s*\d+)?\s*of\s+\d+:\s*)/i, '').trim();
-                    currentPlatform = { name: name, colSpan: 1, startIndex: i, metrics: {} };
-                } else if (currentPlatform) {
-                    currentPlatform.colSpan++;
-                }
-            }
-            if (currentPlatform) {
-                platformDetails.push(currentPlatform);
-            }
-
-            platformDetails.forEach(platform => {
-                for (let i = 0; i < platform.colSpan; i++) {
-                    const metricName = header2[platform.startIndex + i]?.toLowerCase().trim();
-                    if (metricName) {
-                        platform.metrics[metricName] = platform.startIndex + i;
-                    }
-                }
+      if (type === 'inventory') {
+          const headers: string[] = json[0];
+          const importedData: InventoryItem[] = json.slice(1).map((row: any[], index: number) => {
+            const item: any = {};
+            headers.forEach((header, i) => {
+              const key = header.toLowerCase().replace(/\s+/g, '_');
+              item[key] = row[i];
             });
+            return {
+              id: Date.now() + index,
+              channel: item.channel || 'Amazon',
+              name: item.sku_name,
+              type: 'B2C',
+              price: parseFloat(item.price) || 0,
+              shipping: parseFloat(item.shipping) || 0,
+              commission: parseFloat(item.commission) || 0,
+              stock_kol: parseInt(item.stock_kol, 10) || 0,
+              stock_pith: parseInt(item.stock_pith, 10) || 0,
+              stock_har: parseInt(item.stock_har, 10) || 0,
+              stock_blr: parseInt(item.stock_blr, 10) || 0,
+              stock_unalloc: parseInt(item.stock_unalloc, 10) || 0,
+              stock_factory: parseInt(item.stock_factory, 10) || 0,
+              stock_wip: parseInt(item.stock_wip, 10) || 0,
+              drr_kol: parseInt(item.drr_kol, 10) || 0,
+              drr_pith: parseInt(item.drr_pith, 10) || 0,
+              drr_har: parseInt(item.drr_har, 10) || 0,
+              drr_blr: parseInt(item.drr_blr, 10) || 0,
+              drr: parseInt(item.drr, 10) || 0,
+              spend: parseFloat(item.spend) || 0,
+              orders: parseInt(item.orders, 10) || 0,
+              returns: parseInt(item.returns, 10) || 0,
+              impr: parseInt(item.impr, 10) || 0,
+              clicks: parseInt(item.clicks, 10) || 0,
+              ads_active: item.ads_active === 'TRUE' || item.ads_active === true,
+              rating: parseFloat(item.rating) || 0,
+              reviews: parseInt(item.reviews, 10) || 0
+            };
+          });
+          setDisplayData(importedData);
+      } else { // growth or daily
+          const header1: string[] = json[0] || [];
+          const header2: string[] = json[1] || [];
+          
+          const platformHeaders: { name: string, startIndex: number, endIndex: number }[] = [];
+          let currentPlatform: string | null = null;
+          let currentPlatformIndex = -1;
 
-            const processedData: ProcessedSheetData[] = [];
-            const excelEpoch = new Date(1899, 11, 30);
+          header1.forEach((cell, index) => {
+              if (cell && cell.trim() !== '') {
+                  if (currentPlatform) {
+                      platformHeaders.push({ name: currentPlatform, startIndex: currentPlatformIndex, endIndex: index - 1 });
+                  }
+                  const platformNameMatch = cell.match(/(\d+\s*of\s*\d+:\s*)?(.*)/);
+                  currentPlatform = platformNameMatch ? platformNameMatch[2].trim() : cell.trim();
+                  currentPlatformIndex = index;
+              }
+          });
+          if (currentPlatform) {
+              platformHeaders.push({ name: currentPlatform, startIndex: currentPlatformIndex, endIndex: header1.length - 1 });
+          }
+          
+          const processedData: ProcessedSheetData[] = [];
+          
+          json.slice(2).forEach(row => {
+              const dateString = row[0];
+              if (!dateString) return;
 
-            dataRows.forEach(row => {
-                const dateRaw = row[0];
-                if (!dateRaw) return;
+              let date: Date | null = null;
+              if (typeof dateString === 'number') {
+                  // Handle Excel serial date
+                  date = new Date(Date.UTC(1900, 0, dateString - 1));
+              } else if (typeof dateString === 'string') {
+                  const formatsToTry = [
+                      "MMM'yy",
+                      'MM/dd/yyyy',
+                      'yyyy-MM-dd',
+                      'dd-MM-yyyy',
+                      'MMM d, yyyy'
+                  ];
+                  for (const fmt of formatsToTry) {
+                      const parsedDate = parse(dateString, fmt, new Date());
+                      if (isValid(parsedDate)) {
+                          date = parsedDate;
+                          break;
+                      }
+                  }
+              }
+              if (!date) return;
 
-                let date: Date | null = null;
-                if (typeof dateRaw === 'number') {
-                    date = addDays(excelEpoch, dateRaw - 1);
-                } else if (typeof dateRaw === 'string') {
-                     const formats = ["dd-MMM-yy", "dd-MMM", "MM/dd/yy", "M/d/yy", "MMM'yy", "MMMM d, yyyy", "yyyy-MM-dd"];
-                    for (const fmt of formats) {
-                        const parsedDate = parse(dateRaw, fmt, new Date());
-                        if (isValid(parsedDate)) {
-                            date = parsedDate;
-                            break;
-                        }
-                    }
-                    if (!date && /^\d{5}$/.test(dateRaw)) {
-                        date = addDays(excelEpoch, parseInt(dateRaw, 10) - 1);
-                    }
-                }
+              platformHeaders.forEach(platform => {
+                   if (platform.name.toLowerCase().includes('total')) return;
 
-                if (!date || !isValid(date)) return;
+                   let gmv = 0, units = 0, packets = 0, adsSpent = 0;
 
-                platformDetails.forEach(platform => {
-                    const getValue = (metric: string) => {
-                        const colIndex = platform.metrics[metric];
-                        if (colIndex === undefined) return 0;
-                        const value = row[colIndex];
-                        if (value === null || value === undefined || value === '-' || value === '') return 0;
-                        const numValue = typeof value === 'string' 
-                            ? parseFloat(value.replace(/[,₹]/g, '')) 
-                            : typeof value === 'number' ? value : 0;
-                        return isNaN(numValue) ? 0 : numValue;
-                    };
-                    
-                    const gmv = getValue('gmv');
-                    const units = getValue('units');
-                    const packets = getValue('packets');
-                    const adsSpent = getValue('ads spent');
-                    
-                    if (gmv > 0 || units > 0 || packets > 0 || adsSpent > 0) {
+                   for (let i = platform.startIndex; i <= platform.endIndex; i++) {
+                       const metric = header2[i]?.toLowerCase() || '';
+                       const value = typeof row[i] === 'string' ? parseFloat(row[i].replace(/[^0-9.-]+/g,"")) : row[i];
+                       if (isNaN(value)) continue;
+
+                       if (metric.includes('gmv')) gmv = value;
+                       else if (metric.includes('units')) units = value;
+                       else if (metric.includes('packets')) packets = value;
+                       else if (metric.includes('ads spent')) adsSpent = value;
+                   }
+                  
+                   if (gmv > 0 || units > 0 || packets > 0 || adsSpent > 0) {
                         const avgAsp = units > 0 ? gmv / units : 0;
                         const tacos = gmv > 0 ? adsSpent / gmv : 0;
-                        
+                       
                         processedData.push({
-                           date: date as Date,
-                           channel: platform.name,
-                           gmv,
-                           units,
-                           packets,
-                           adsSpent,
-                           avgAsp,
-                           tacos,
-                           month: format(date as Date, 'MMM'),
-                           year: format(date as Date, 'yyyy'),
-                           day: format(date as Date, 'd'),
-                           revenuePerUnit: units > 0 ? gmv / units : 0,
-                           adsPerUnit: units > 0 ? adsSpent / units : 0,
-                       });
-                    }
-                });
-            });
+                          date: date as Date,
+                          channel: platform.name,
+                          gmv,
+                          units,
+                          packets,
+                          adsSpent,
+                          avgAsp,
+                          tacos,
+                          month: format(date as Date, 'MMM'),
+                          year: format(date as Date, 'yyyy'),
+                          day: format(date as Date, 'd'),
+                          revenuePerUnit: units > 0 ? gmv / units : 0,
+                          adsPerUnit: units > 0 ? adsSpent / units : 0,
+                      });
+                   }
+               });
+           });
             
             if (processedData.length === 0) {
                  throw new Error("No valid data was parsed from the sheet. Check the format and headers.");
@@ -349,14 +358,13 @@ export default function MainView() {
 
   return (
     <>
-      <Header onReset={resetData} />
-
+      <Header onReset={handleReset} />
       {alerts.length > 0 && (
         <Alert variant="destructive" className="mb-6">
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>Action Required</AlertTitle>
           <AlertDescription>
-            <ul className="list-disc list-inside space-y-1">
+            <ul className="list-disc list-inside">
               {alerts.map((alert, i) => (
                 <li key={i}>{alert}</li>
               ))}
@@ -365,19 +373,18 @@ export default function MainView() {
         </Alert>
       )}
 
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabId)} className="w-full">
-        <TabsList className="grid w-full grid-cols-5 bg-slate-100 dark:bg-slate-800 h-auto p-1 mb-6">
+      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as TabId)}>
+        <TabsList className="mb-4">
           {(Object.keys(channelIcons) as TabId[]).map(tab => {
             const Icon = channelIcons[tab];
             return (
-              <TabsTrigger key={tab} value={tab} className="capitalize flex items-center gap-2 whitespace-nowrap data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md">
-                <Icon className="w-4 h-4" />
+              <TabsTrigger key={tab} value={tab} className="capitalize text-xs sm:text-sm">
+                <Icon className="w-4 h-4 mr-1.5" />
                 {tab === 'daily' ? 'Daily Ops' : tab === 'dailypnl' ? 'Daily P&L' : tab === 'recommendations' ? 'Action Center' : tab}
               </TabsTrigger>
             )
           })}
         </TabsList>
-        
         <TabsContent value="daily">
             <DailyOpsTab
                 data={filteredData}
@@ -394,33 +401,30 @@ export default function MainView() {
             />
         </TabsContent>
         <TabsContent value="inventory">
-            <InventoryTab 
-              data={displayData} 
-              searchTerm={searchTerm}
-              onCloudImport={() => openCloudImport('inventory')}
-              onFileUpload={(e) => handleFileUpload(e, 'inventory')}
-            />
-        </TabsContent>
+              <InventoryTab 
+                data={displayData} 
+                searchTerm={searchTerm}
+                onFileUpload={(e) => handleFileUpload(e, 'inventory')}
+                onCloudImport={() => openCloudImport('inventory')}
+              />
+            </TabsContent>
         <TabsContent value="growth">
-             <GrowthTab 
-                data={growthData}
-                onFileUpload={(e) => handleFileUpload(e, 'growth')}
-                onCloudImport={() => openCloudImport('growth')}
-             />
+                <GrowthTab
+                    data={growthData}
+                    onFileUpload={(e) => handleFileUpload(e, 'growth')}
+                    onCloudImport={() => openCloudImport('growth')}
+                 />
         </TabsContent>
         <TabsContent value="dailypnl">
-             <PnlTab 
-                data={dailyData} 
-                onFileUpload={(e) => handleFileUpload(e, 'daily')}
-                onCloudImport={() => openCloudImport('dailypnl')}
-             />
+                <PnlTab 
+                    data={dailyData}
+                    onFileUpload={(e) => handleFileUpload(e, 'daily')}
+                    onCloudImport={() => openCloudImport('dailypnl')}
+                 />
         </TabsContent>
         <TabsContent value="recommendations">
-            <RecommendationsTab 
-                inventoryData={displayData}
-                roasThreshold={roasThreshold}
-            />
-        </TabsContent>
+                <RecommendationsTab inventoryData={displayData} roasThreshold={roasThreshold} />
+            </TabsContent>
       </Tabs>
 
       <CloudImportModal
@@ -432,7 +436,6 @@ export default function MainView() {
         }}
         type={pendingCloudType}
       />
-      
       <AddSkuModal
         isOpen={isAddSkuModalOpen}
         onClose={() => setAddSkuModalOpen(false)}
@@ -455,10 +458,3 @@ export default function MainView() {
     </>
   );
 }
-
-    
-
-    
-
-
-    
