@@ -85,6 +85,8 @@ export default function MainView() {
     setSearchTerm("");
     setCurrentChannel("All");
     setRoasThreshold(1.5);
+    setDailyData(null);
+    setGrowthData(null);
     toast({ title: "View Reset", description: "All data has been reset to its initial state." });
   };
 
@@ -149,30 +151,36 @@ export default function MainView() {
               const key = header.toLowerCase().replace(/\s+/g, '_');
               item[key] = row[i];
             });
+
+            const drr_kol = parseInt(item.kol_drr, 10) || 0;
+            const drr_pith = parseInt(item.pith_drr, 10) || 0;
+            const drr_har = parseInt(item.har_drr, 10) || 0;
+            const drr_blr = parseInt(item.blr_drr, 10) || 0;
+
             return {
               id: Date.now() + index,
               channel: item.channel || 'Amazon',
-              name: item.sku_name || item.name,
-              type: 'B2C',
+              name: item.sku_name,
+              type: 'B2C', // Default or determine from data
               price: parseFloat(item.price) || 0,
               shipping: parseFloat(item.shipping) || 0,
               commission: parseFloat(item.commission) || 0,
-              stock_kol: parseInt(item.stock_kol, 10) || 0,
-              stock_pith: parseInt(item.stock_pith, 10) || 0,
-              stock_har: parseInt(item.stock_har, 10) || 0,
-              stock_blr: parseInt(item.stock_blr, 10) || 0,
-              stock_unalloc: parseInt(item.stock_unalloc, 10) || 0,
-              stock_factory: parseInt(item.stock_factory, 10) || 0,
-              stock_wip: parseInt(item.stock_wip, 10) || 0,
-              drr_kol: parseInt(item.drr_kol, 10) || 0,
-              drr_pith: parseInt(item.drr_pith, 10) || 0,
-              drr_har: parseInt(item.drr_har, 10) || 0,
-              drr_blr: parseInt(item.drr_blr, 10) || 0,
-              drr: parseInt(item.drr, 10) || 0,
-              spend: parseFloat(item.spend) || 0,
+              stock_kol: parseInt(item.kol_stock, 10) || 0,
+              stock_pith: parseInt(item.pith_stock, 10) || 0,
+              stock_har: parseInt(item.har_stock, 10) || 0,
+              stock_blr: parseInt(item.blr_stock, 10) || 0,
+              stock_unalloc: parseInt(item.unalloc_stock, 10) || 0,
+              stock_factory: parseInt(item.factory_stock, 10) || 0,
+              stock_wip: parseInt(item.wip_stock, 10) || 0,
+              drr_kol: drr_kol,
+              drr_pith: drr_pith,
+              drr_har: drr_har,
+              drr_blr: drr_blr,
+              drr: drr_kol + drr_pith + drr_har + drr_blr, // Sum of all DRRs
+              spend: parseFloat(item.ad_spend) || 0,
               orders: parseInt(item.orders, 10) || 0,
               returns: parseInt(item.returns, 10) || 0,
-              impr: parseInt(item.impr, 10) || 0,
+              impr: parseInt(item.impressions, 10) || 0,
               clicks: parseInt(item.clicks, 10) || 0,
               ads_active: String(item.ads_active).toUpperCase() === 'TRUE',
               rating: parseFloat(item.rating) || 0,
@@ -180,7 +188,7 @@ export default function MainView() {
             };
           });
           if (importedData.length === 0 || !importedData.some(d => d.name)) {
-             throw new Error("No valid inventory data was parsed. Check column headers like 'SKU Name', 'Price', 'Stock_KOL', etc.");
+             throw new Error("No valid inventory data was parsed. Check column headers like 'SKU Name', 'Price', 'Kol Stock', etc.");
           }
           setDisplayData(importedData);
       } else if (type === 'daily' || type === 'growth') {
