@@ -343,7 +343,7 @@ export const masterData: InventoryItem[] = [
     spend: 0,
     orders: 11,
     returns: 0,
-    impr: 0,
+impr: 0,
     clicks: 0,
     ads_active: false,
     rating: 0,
