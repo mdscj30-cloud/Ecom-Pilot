@@ -38,6 +38,7 @@ export interface Kpi {
 export interface InventoryKpi {
   sellableValue: number;
   capitalNeeded: number;
+
   avgCover: number;
   stockouts: number;
   stuckCapital: number;
@@ -83,7 +84,7 @@ export interface MatrixData {
   };
 }
 
-export type TabId = 'daily' | 'inventory' | 'growth' | 'dailypnl' | 'recommendations';
+export type TabId = 'daily' | 'inventory' | 'dailypnl' | 'recommendations';
 
 export type SortConfig = {
     column: string | null;

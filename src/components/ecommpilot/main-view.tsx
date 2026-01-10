@@ -5,7 +5,6 @@ import * as XLSX from "xlsx";
 import {
   Activity,
   AlertTriangle,
-  BarChart2,
   Box,
   Calendar,
   CheckCircle,
@@ -21,15 +20,14 @@ import type {
   Recommendation
 } from "@/lib/types";
 import { masterData } from "@/lib/data";
-import { growthData as initialGrowthData } from "@/lib/growth-data";
-import { format, parse, isValid, addDays } from 'date-fns';
+
+import { format, parse, isValid } from 'date-fns';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import Header from "./header";
 import DailyOpsTab from "./tabs/daily-ops-tab";
 import InventoryTab from "./tabs/inventory-tab";
-import GrowthTab from "./tabs/growth-tab";
 import PnlTab from "./tabs/pnl-tab";
 import RecommendationsTab from "./tabs/recommendations-tab";
 import { CloudImportModal, AddSkuModal } from "./modals";
@@ -37,7 +35,6 @@ import { CloudImportModal, AddSkuModal } from "./modals";
 const channelIcons = {
   daily: Activity,
   inventory: Box,
-  growth: BarChart2,
   dailypnl: Calendar,
   recommendations: CheckCircle,
 };
@@ -49,7 +46,6 @@ export default function MainView() {
   const [activeTab, setActiveTab] = useState<TabId>("daily");
   const [displayData, setDisplayData] = useState<InventoryItem[]>([]);
   const [filteredData, setFilteredData] = useState<InventoryItem[]>([]);
-  const [growthData, setGrowthData] = useState<ProcessedSheetData[] | null>(null);
   const [dailyData, setDailyData] = useState<ProcessedSheetData[] | null>(null);
 
   // Filters & Thresholds
@@ -73,7 +69,6 @@ export default function MainView() {
   // === DATA INITIALIZATION & RESET ===
   const initializeData = useCallback(() => {
     setDisplayData(masterData);
-    setGrowthData(initialGrowthData.length > 0 ? initialGrowthData : null);
     setDailyData(null);
   }, []);
 
@@ -130,7 +125,7 @@ export default function MainView() {
   // === DATA PROCESSING & IMPORT ===
   const processSheetData = (
     data: ArrayBuffer,
-    type: 'inventory' | 'growth' | 'daily'
+    type: 'inventory' | 'daily'
   ) => {
     try {
       const workbook = XLSX.read(data, { type: "array" });
@@ -177,7 +172,7 @@ export default function MainView() {
             };
           });
           setDisplayData(importedData);
-      } else { // growth or daily
+      } else { // daily
           const header1: string[] = json[0] || [];
           const header2: string[] = json[1] || [];
           
@@ -270,11 +265,7 @@ export default function MainView() {
                  throw new Error("No valid data was parsed from the sheet. Check the format and headers.");
             }
             
-            if (type === 'growth') {
-                setGrowthData(processedData);
-            } else { // daily
-                setDailyData(processedData);
-            }
+            setDailyData(processedData);
         }
       
       toast({ title: "Import Successful", description: `${type.charAt(0).toUpperCase() + type.slice(1)} data has been loaded.` });
@@ -290,7 +281,7 @@ export default function MainView() {
 
   const handleFileUpload = (
     event: React.ChangeEvent<HTMLInputElement>,
-    type: 'inventory' | 'growth' | 'daily'
+    type: 'inventory' | 'daily'
   ) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -322,11 +313,9 @@ export default function MainView() {
         }
         const data = await response.arrayBuffer();
         
-        let dataType: 'inventory' | 'growth' | 'daily' | null = null;
+        let dataType: 'inventory' | 'daily' | null = null;
         if (type === 'daily') { // Maps to inventory sheet on Daily Ops tab
             dataType = 'inventory';
-        } else if (type === 'growth') {
-            dataType = 'growth';
         } else if (type === 'dailypnl') {
             dataType = 'daily';
         } else if (type === 'inventory') { // From inventory tab
@@ -408,13 +397,7 @@ export default function MainView() {
                 onCloudImport={() => openCloudImport('inventory')}
               />
             </TabsContent>
-        <TabsContent value="growth">
-                <GrowthTab
-                    data={growthData}
-                    onFileUpload={(e) => handleFileUpload(e, 'growth')}
-                    onCloudImport={() => openCloudImport('growth')}
-                 />
-        </TabsContent>
+
         <TabsContent value="dailypnl">
                 <PnlTab 
                     data={dailyData}
