@@ -221,10 +221,12 @@ export default function MainView() {
                   if (!dateString) return;
 
                   let date: Date | null = null;
+                  // Excel serial date number
                   if (typeof dateString === 'number') {
-                      date = new Date(Date.UTC(1900, 0, dateString - 1));
+                      date = XLSX.SSF.parse_date_code(dateString);
+                      date = new Date(Date.UTC(date.y, date.m - 1, date.d));
                   } else if (typeof dateString === 'string') {
-                      const formatsToTry = [ "MMM'yy", 'MM/dd/yyyy', 'yyyy-MM-dd', 'dd-MM-yyyy', 'MMM d, yyyy' ];
+                      const formatsToTry = ["d-MMM-yy", "MM/dd/yyyy", "yyyy-MM-dd", "dd-MM-yyyy", "MMM d, yyyy"];
                       for (const fmt of formatsToTry) {
                           const parsedDate = parse(dateString, fmt, new Date());
                           if (isValid(parsedDate)) {
@@ -234,6 +236,7 @@ export default function MainView() {
                       }
                   }
                   if (!date) return;
+
 
                   platformHeaders.forEach(platform => {
                       if (platform.name.toLowerCase().includes('total')) return;
@@ -357,12 +360,10 @@ export default function MainView() {
         const data = await response.arrayBuffer();
         
         let dataType: 'inventory' | 'daily' | 'growth' | null = null;
-        if (type === 'daily') { // Maps to inventory sheet on Daily Ops tab
+        if (type === 'daily' || type === 'inventory') {
             dataType = 'inventory';
         } else if (type === 'dailypnl') {
             dataType = 'daily';
-        } else if (type === 'inventory') { // From inventory tab
-             dataType = 'inventory';
         } else if (type === 'growth') {
              dataType = 'growth';
         }
