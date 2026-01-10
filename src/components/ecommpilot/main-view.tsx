@@ -172,26 +172,21 @@ export default function MainView() {
             const metricHeaders = json[1];
             const dataRows = json.slice(2);
             
-            const platformDetails: { name: string, startIndex: number, endIndex: number }[] = [];
-            let currentPlatformName: string | null = null;
-            let currentPlatformStartIndex = -1;
-
-            for (let i = 1; i < platformHeaders.length; i++) {
+            const platformDetails: { name: string, colSpan: number, startIndex: number }[] = [];
+            let i = 1;
+            while(i < platformHeaders.length) {
                 const header = platformHeaders[i];
-                if (header && typeof header === 'string' && header.trim() !== '') {
-                    // This is a new platform starting
-                    if (currentPlatformName) {
-                        // End the previous platform
-                        platformDetails.push({ name: currentPlatformName, startIndex: currentPlatformStartIndex, endIndex: i - 1 });
+                if (header && typeof header === 'string' && header.trim()) {
+                    const platformName = header.trim().replace(/^(\d+\s*(and\d+)?\s*of\s+\d+:\s*)/, '');
+                    let colSpan = 1;
+                    while (i + colSpan < platformHeaders.length && !platformHeaders[i + colSpan]) {
+                        colSpan++;
                     }
-                    // Start a new platform
-                    currentPlatformName = header.trim().replace(/^(\d+\s*(and\d+)?\s*of\s+\d+:\s*)/, '');
-                    currentPlatformStartIndex = i;
+                    platformDetails.push({ name: platformName, colSpan: colSpan, startIndex: i });
+                    i += colSpan;
+                } else {
+                    i++;
                 }
-            }
-             // Add the last platform
-            if (currentPlatformName) {
-                platformDetails.push({ name: currentPlatformName, startIndex: currentPlatformStartIndex, endIndex: platformHeaders.length - 1 });
             }
 
             const processedData: ProcessedSheetData[] = [];
@@ -202,9 +197,11 @@ export default function MainView() {
 
                 let date: Date | null = null;
                 if (typeof dateRaw === 'number') {
+                    // Excel date (serial number)
                     const excelEpoch = new Date(Date.UTC(1899, 11, 30));
                     date = new Date(excelEpoch.getTime() + dateRaw * 86400000);
                 } else if (typeof dateRaw === 'string') {
+                    // Try parsing common date formats
                     const dateFormatsToTry = ["MMM'yy", "dd-MMM-yy", "dd-MMM", "yyyy-MM-dd", "MM/dd/yy", "M/d/yy"];
                     for (const fmt of dateFormatsToTry) {
                         const d = parse(dateRaw, fmt, new Date());
@@ -213,7 +210,8 @@ export default function MainView() {
                             break;
                         }
                     }
-                     if (!date && /^\d{5}$/.test(dateRaw)) {
+                    // Fallback for 5-digit Excel date as string
+                    if (!date && /^\d{5}$/.test(dateRaw)) {
                         const excelEpoch = new Date(Date.UTC(1899, 11, 30));
                         date = new Date(excelEpoch.getTime() + parseInt(dateRaw, 10) * 86400000);
                     }
@@ -222,14 +220,14 @@ export default function MainView() {
                 if (!date || !isValid(date)) return;
 
                 platformDetails.forEach(platform => {
-                    let gmv = 0, units = 0, packets = 0, adsSpent = 0;
-                    
                     const metricMap: { [key: string]: number } = { gmv: 0, units: 0, packets: 0, adsSpent: 0 };
                     
-                    for (let i = platform.startIndex; i <= platform.endIndex; i++) {
-                        const metric = metricHeaders[i]?.toLowerCase().trim();
-                        const value = row[i];
-                        if (value === null || value === undefined || value === '-' || value === '') continue;
+                    for (let j = 0; j < platform.colSpan; j++) {
+                        const colIndex = platform.startIndex + j;
+                        const metric = metricHeaders[colIndex]?.toLowerCase().trim();
+                        const value = row[colIndex];
+                        
+                        if (value === null || value === undefined || value === '-' || value === '' || !metric) continue;
 
                         const numValue = (typeof value === 'string') ? parseFloat(value.replace(/[,₹]/g, '')) || 0 : (typeof value === 'number' ? value : 0);
 
@@ -239,10 +237,7 @@ export default function MainView() {
                         else if (metric === 'ads spent') metricMap.adsSpent += numValue;
                     }
                     
-                    gmv = metricMap.gmv;
-                    units = metricMap.units;
-                    packets = metricMap.packets;
-                    adsSpent = metricMap.adsSpent;
+                    const { gmv, units, packets, adsSpent } = metricMap;
 
                     if (gmv > 0 || units > 0 || adsSpent > 0 || packets > 0) {
                          const avgAsp = units > 0 ? gmv / units : 0;
@@ -494,4 +489,5 @@ export default function MainView() {
   );
 }
 
+    
     
