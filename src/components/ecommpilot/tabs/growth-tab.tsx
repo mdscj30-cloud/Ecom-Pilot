@@ -1,8 +1,8 @@
 "use client";
 
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Line, ComposedChart } from 'recharts';
+import { ComposedChart, Area, Line } from 'recharts';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
+import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from '@/components/ui/button';
 import { BarChart2, Upload, Cloud, Download } from "lucide-react";
@@ -17,6 +17,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tooltip as UiTooltip, TooltipContent as UiTooltipContent, TooltipProvider, TooltipTrigger as UiTooltipTrigger } from '@/components/ui/tooltip';
+import * as RechartsPrimitive from "recharts";
 
 interface GrowthTabProps {
   data: MatrixData | null;
@@ -36,7 +37,7 @@ export default function GrowthTab({ data, labels, onFileUpload, onCloudImport }:
   
   const totalPlatformKey = useMemo(() => {
     if (!data) return null;
-    return Object.keys(data).find(k => k.toLowerCase().includes('total')) || null;
+    return Object.keys(data).find(k => k.toLowerCase().includes('total')) || Object.keys(data)[0];
   }, [data]);
 
   const chartData = useMemo(() => {
@@ -48,7 +49,7 @@ export default function GrowthTab({ data, labels, onFileUpload, onCloudImport }:
       const spend = (data[totalPlatformKey]?.spend[index] || 0) / 100000; // in Lakhs
       entry.gmv = gmv;
       entry.spend = spend;
-      entry.roas = spend > 0 ? gmv / spend : 0;
+      entry.roas = spend > 0 ? (gmv / spend) : 0;
       return entry;
     });
 
@@ -91,37 +92,6 @@ export default function GrowthTab({ data, labels, onFileUpload, onCloudImport }:
       </Card>
     );
   }
-
-  const renderChart = () => {
-    switch (chartView) {
-      case 'roas':
-        return (
-          <BarChart data={chartData}>
-            <CartesianGrid vertical={false} />
-            <XAxis dataKey="name" tickLine={false} axisLine={false} tickMargin={8} />
-            <YAxis />
-            <Tooltip content={<ChartTooltipContent />} />
-            <Legend />
-            <Bar dataKey="roas" fill={chartConfig.roas.color} radius={4} name="ROAS" />
-          </BarChart>
-        );
-      case 'gmv_vs_spend':
-      default:
-        return (
-          <ComposedChart data={chartData}>
-            <CartesianGrid vertical={false} />
-            <XAxis dataKey="name" tickLine={false} axisLine={false} tickMargin={8} />
-            <YAxis yAxisId="left" orientation="left" label={{ value: 'Lakhs (₹)', angle: -90, position: 'insideLeft' }} />
-            <YAxis yAxisId="right" orientation="right" label={{ value: 'ROAS', angle: 90, position: 'insideRight' }} />
-            <Tooltip content={<ChartTooltipContent />} />
-            <Legend />
-            <Bar yAxisId="left" dataKey="gmv" fill={chartConfig.gmv.color} radius={4} name="GMV (Lakhs)" />
-            <Bar yAxisId="left" dataKey="spend" fill={chartConfig.spend.color} radius={4} name="Ad Spend (Lakhs)" />
-            <Line yAxisId="right" type="monotone" dataKey="roas" stroke={chartConfig.roas.color} strokeWidth={2} name="ROAS" />
-          </ComposedChart>
-        );
-    }
-  };
 
   return (
     <div className="space-y-6">
@@ -178,8 +148,70 @@ export default function GrowthTab({ data, labels, onFileUpload, onCloudImport }:
           </div>
         </CardHeader>
         <CardContent>
-          <ChartContainer config={chartConfig} className="h-[300px] w-full">
-            {renderChart()}
+          <ChartContainer
+            config={chartConfig}
+            className="h-[300px] w-full"
+          >
+            <ComposedChart
+                data={chartData}
+            >
+                <ChartLegend content={<ChartLegendContent />} />
+                <RechartsPrimitive.CartesianGrid vertical={false} />
+                <RechartsPrimitive.XAxis dataKey="name" tickLine={false} axisLine={false} tickMargin={8} />
+                <RechartsPrimitive.YAxis 
+                    yAxisId="left" 
+                    orientation="left" 
+                    tickFormatter={(value) => `₹${value}L`}
+                    domain={['dataMin', 'dataMax']}
+                    hide={chartView === 'roas'}
+                />
+                <RechartsPrimitive.YAxis 
+                    yAxisId="right" 
+                    orientation="right" 
+                    tickFormatter={(value) => value.toFixed(1)} 
+                    domain={['dataMin', 'dataMax']}
+                />
+                <ChartTooltip
+                  content={
+                    <ChartTooltipContent
+                      labelFormatter={(value, payload) => {
+                        return payload?.[0]?.payload.name;
+                      }}
+                      formatter={(value, name) => {
+                          const numValue = Number(value);
+                          if (name === 'roas') return numValue.toFixed(2);
+                          return `₹${numValue.toFixed(2)} L`;
+                      }}
+                    />
+                  }
+                />
+                <defs>
+                    <linearGradient id="fillGmv" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="var(--color-gmv)" stopOpacity={0.8}/>
+                        <stop offset="95%" stopColor="var(--color-gmv)" stopOpacity={0.1}/>
+                    </linearGradient>
+                    <linearGradient id="fillSpend" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="var(--color-spend)" stopOpacity={0.8}/>
+                        <stop offset="95%" stopColor="var(--color-spend)" stopOpacity={0.1}/>
+                    </linearGradient>
+                </defs>
+                
+                {chartView === 'gmv_vs_spend' ? (
+                  <>
+                    <Area type="monotone" dataKey="gmv" fill="url(#fillGmv)" stroke="var(--color-gmv)" yAxisId="left" />
+                    <Area type="monotone" dataKey="spend" fill="url(#fillSpend)" stroke="var(--color-spend)" yAxisId="left" />
+                  </>
+                ) : null}
+
+                <Line
+                    dataKey="roas"
+                    stroke="var(--color-roas)"
+                    yAxisId="right"
+                    strokeWidth={3}
+                    dot={false}
+                    activeDot={{r: 6}}
+                />
+            </ComposedChart>
           </ChartContainer>
         </CardContent>
       </Card>

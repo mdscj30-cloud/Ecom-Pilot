@@ -53,6 +53,7 @@ export interface MatrixData {
     asp: number[];
     tacos: number[];
     share: number[];
+    roas: number[];
     merged?: number[]; // For combined views like Rev/Ads
   };
 }

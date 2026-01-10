@@ -1,8 +1,8 @@
 "use client";
 
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend, Area, ComposedChart } from 'recharts';
+import { Bar, Area, ComposedChart } from 'recharts';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart";
 import { Button } from '@/components/ui/button';
 import { Calendar, Upload, Cloud, Download } from "lucide-react";
 import React, { useMemo } from 'react';
@@ -16,6 +16,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import * as RechartsPrimitive from "recharts";
 
 
 interface PnlTabProps {
@@ -35,7 +36,7 @@ export default function PnlTab({ data, labels, onFileUpload, onCloudImport }: Pn
   
   const totalPlatformKey = useMemo(() => {
     if (!data) return null;
-    return Object.keys(data).find(k => k.toLowerCase().includes('total')) || null;
+    return Object.keys(data).find(k => k.toLowerCase().includes('total')) || Object.keys(data)[0];
   }, [data]);
 
   const chartData = useMemo(() => {
@@ -144,17 +145,34 @@ export default function PnlTab({ data, labels, onFileUpload, onCloudImport }: Pn
         <CardContent>
           <ChartContainer config={chartConfig} className="h-[300px] w-full">
             <ComposedChart data={chartData}>
-                <CartesianGrid vertical={false} />
-                <XAxis dataKey="name" tickLine={false} axisLine={false} tickMargin={8} />
-                <YAxis label={{ value: 'Thousands (₹)', angle: -90, position: 'insideLeft' }}/>
+                <RechartsPrimitive.CartesianGrid vertical={false} />
+                <RechartsPrimitive.XAxis dataKey="name" tickLine={false} axisLine={false} tickMargin={8} />
+                <RechartsPrimitive.YAxis tickFormatter={(value) => `₹${value}k`} />
                 <ChartTooltip
                     cursor={false}
-                    content={<ChartTooltipContent indicator="dot" />}
+                    content={<ChartTooltipContent 
+                        indicator="dot" 
+                        formatter={(value) => `₹${Number(value).toFixed(2)}k`}
+                    />}
                 />
-                <Legend />
-                <Bar dataKey="revenue" fill={chartConfig.revenue.color} radius={4} name="Revenue (k)" />
-                <Bar dataKey="costs" fill={chartConfig.costs.color} radius={4} name="Costs (k)" />
-                <Area type="monotone" dataKey="profit" fill={chartConfig.profit.color} stroke={chartConfig.profit.color} fillOpacity={0.3} name="Profit (k)" />
+                <ChartLegend content={<ChartLegendContent />} />
+                <defs>
+                    <linearGradient id="fillProfit" x1="0" y1="0" x2="0" y2="1">
+                        <stop
+                        offset="5%"
+                        stopColor="var(--color-profit)"
+                        stopOpacity={0.8}
+                        />
+                        <stop
+                        offset="95%"
+                        stopColor="var(--color-profit)"
+                        stopOpacity={0.1}
+                        />
+                    </linearGradient>
+                </defs>
+                <Bar dataKey="revenue" fill="var(--color-revenue)" radius={4} barSize={20} />
+                <Bar dataKey="costs" fill="var(--color-costs)" radius={4} barSize={20} />
+                <Area type="monotone" dataKey="profit" fill="url(#fillProfit)" stroke="var(--color-profit)" />
             </ComposedChart>
           </ChartContainer>
         </CardContent>

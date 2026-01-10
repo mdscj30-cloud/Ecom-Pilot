@@ -163,7 +163,7 @@ export default function MainView() {
         } else if (type === 'growth' || type === 'daily') {
              const raw_data = XLSX.utils.sheet_to_json<any>(worksheet, { header: 1 });
             if (raw_data.length < 2) {
-              throw new Error("Sheet must have at least 2 header rows.");
+              throw new Error("Sheet must have at least 2 header rows for platforms and metrics.");
             }
 
             const mainHeaders = raw_data[0];
@@ -173,43 +173,62 @@ export default function MainView() {
             const matrixData: MatrixData = {};
             const labels: string[] = [];
 
-            const platformKeys = ['GMV', 'Units', 'Packets', 'Ads Spent', 'Avg ASP', 'TACOS'];
+            // Extract labels (Month/Date) from the first column
+            body.forEach(row => {
+                if (row[0]) {
+                    labels.push(row[0]);
+                }
+            });
             
             let currentPlatform: string | null = null;
-            let platformName = '';
             
             mainHeaders.forEach((header, index) => {
+                // A new platform is identified by a non-empty cell in the first header row.
                 if (header) {
-                    currentPlatform = header;
-                    platformName = typeof header === 'string' ? header : `Platform ${index}`;
-                    if (!matrixData[platformName]) {
-                        matrixData[platformName] = { name: platformName, gmv:[], units:[], packets:[], spend:[], asp:[], tacos:[], share:[] };
+                    currentPlatform = String(header).trim();
+                    if (currentPlatform && !matrixData[currentPlatform]) {
+                        matrixData[currentPlatform] = { name: currentPlatform, gmv:[], units:[], packets:[], spend:[], asp:[], tacos:[], share:[], roas: [] };
                     }
                 }
 
-                if(currentPlatform) {
-                    const subHeader = subHeaders[index];
-                    const platformData = matrixData[platformName];
-                    
-                    if (index === 0) { // Labels column (Month/Date)
-                        body.forEach(row => {
-                            if(row[index] && !labels.includes(row[index])) {
-                                labels.push(row[index]);
-                            }
-                        });
-                    }
+                if (currentPlatform) {
+                    const subHeader = String(subHeaders[index]).trim();
+                    const platformData = matrixData[currentPlatform];
 
-                    if (platformKeys.includes(subHeader)) {
-                        body.forEach((row, rowIndex) => {
-                             const value = parseFloat(String(row[index]).replace(/,/g, '')) || 0;
-                             if(subHeader === 'GMV') platformData.gmv[rowIndex] = (platformData.gmv[rowIndex] || 0) + value;
-                             if(subHeader === 'Units') platformData.units[rowIndex] = (platformData.units[rowIndex] || 0) + value;
-                             if(subHeader === 'Ads Spent') platformData.spend[rowIndex] = (platformData.spend[rowIndex] || 0) + value;
-                             if(subHeader === 'Avg ASP') platformData.asp[rowIndex] = (platformData.asp[rowIndex] || 0) + value;
-                             if(subHeader === 'TACOS') platformData.tacos[rowIndex] = (platformData.tacos[rowIndex] || 0) + value;
-                        });
-                    }
+                    body.forEach((row, rowIndex) => {
+                        const rawValue = row[index];
+                        const value = typeof rawValue === 'string' ? parseFloat(rawValue.replace(/[^0-9.-]+/g,"")) : (rawValue || 0);
+
+                        switch(subHeader) {
+                            case 'GMV':
+                                platformData.gmv[rowIndex] = (platformData.gmv[rowIndex] || 0) + value;
+                                break;
+                            case 'Units':
+                                platformData.units[rowIndex] = (platformData.units[rowIndex] || 0) + value;
+                                break;
+                            case 'Packets':
+                                platformData.packets[rowIndex] = (platformData.packets[rowIndex] || 0) + value;
+                                break;
+                            case 'Ads Spent':
+                                platformData.spend[rowIndex] = (platformData.spend[rowIndex] || 0) + value;
+                                break;
+                            case 'Avg ASP':
+                                platformData.asp[rowIndex] = value; // This is usually not summed
+                                break;
+                            case 'TACOS':
+                                platformData.tacos[rowIndex] = value; // This is usually not summed
+                                break;
+                        }
+                    });
                 }
+            });
+            
+            // Post-process to calculate ROAS for each platform
+            Object.values(matrixData).forEach(platform => {
+              platform.roas = platform.gmv.map((gmv, i) => {
+                const spend = platform.spend[i] || 0;
+                return spend > 0 ? gmv / spend : 0;
+              });
             });
 
             if (type === 'growth') {
@@ -244,18 +263,16 @@ export default function MainView() {
       const data = e.target?.result;
       if (data instanceof ArrayBuffer) {
         processSheetData(data, type);
-      } else if (typeof data === 'string' && file.type === 'text/csv') {
-          // For CSV, convert string to ArrayBuffer for XLSX library
-          const arr = new Uint8Array(data.length);
-          for(let i=0; i<data.length; i++) arr[i] = data.charCodeAt(i);
-          processSheetData(arr.buffer, type);
+      } else if (typeof data === 'string') {
+          const buffer = new ArrayBuffer(data.length);
+          const view = new Uint8Array(buffer);
+          for (let i = 0; i < data.length; i++) {
+              view[i] = data.charCodeAt(i);
+          }
+          processSheetData(buffer, type);
       }
     };
-    if (file.type === 'text/csv') {
-        reader.readAsText(file);
-    } else {
-        reader.readAsArrayBuffer(file);
-    }
+    reader.readAsArrayBuffer(file);
 
     if(event.target) event.target.value = '';
   };
@@ -284,7 +301,6 @@ export default function MainView() {
         } else if (type === 'inventory') { // From inventory tab
              dataType = 'inventory';
         }
-
 
         if (dataType) {
             processSheetData(data, dataType);
