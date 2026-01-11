@@ -100,6 +100,24 @@ export interface MatrixData {
 
 export type TabId = 'daily' | 'inventory' | 'b2b' | 'dailypnl' | 'recommendations' | 'growth';
 
+export type InventorySortColumn = 
+  | 'name'
+  | 'cost'
+  | 'cover'
+  | 'rop'
+  | 'reorderIn'
+  | 'planReq'
+  | 'stock_kol'
+  | 'drr_kol'
+  | 'stock_pith'
+  | 'drr_pith'
+  | 'stock_har'
+  | 'drr_har'
+  | 'stock_blr'
+  | 'drr_blr'
+  | keyof InventoryItem;
+
+
 export type SortConfig = {
     column: string | null;
     direction: 'asc' | 'desc';

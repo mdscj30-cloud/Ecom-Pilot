@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import type { InventoryItem, InventoryKpi, SortConfig } from "@/lib/types";
+import type { InventoryItem, InventoryKpi, SortConfig, InventorySortColumn } from "@/lib/types";
 import KpiCard from "../kpi-card";
 import {
   Table,
@@ -104,7 +104,7 @@ export default function InventoryTab({ data, searchTerm, onFileUpload, onCloudIm
     }
   };
 
-  const requestSort = (column: string) => {
+  const requestSort = (column: InventorySortColumn) => {
     let direction: 'asc' | 'desc' = 'asc';
     if (sortConfig.column === column && sortConfig.direction === 'asc') {
       direction = 'desc';
@@ -112,7 +112,7 @@ export default function InventoryTab({ data, searchTerm, onFileUpload, onCloudIm
     setSortConfig({ column, direction });
   };
   
-  const getSortIcon = (column: string) => {
+  const getSortIcon = (column: InventorySortColumn) => {
     if (sortConfig.column !== column) {
       return <ArrowUpDown className="ml-2 h-4 w-4 inline-block opacity-50" />;
     }
@@ -123,10 +123,12 @@ export default function InventoryTab({ data, searchTerm, onFileUpload, onCloudIm
     let sortableItems = [...filteredInventoryData];
      if (sortConfig.column !== null) {
       sortableItems.sort((a, b) => {
+        const column = sortConfig.column as InventorySortColumn;
+        
         // Handle simple properties
-        if (['name', 'cost'].includes(sortConfig.column!)) {
-            const aValue = a[sortConfig.column as keyof InventoryItem];
-            const bValue = b[sortConfig.column as keyof InventoryItem];
+        if (['name', 'cost'].includes(column)) {
+            const aValue = a[column as 'name' | 'cost'];
+            const bValue = b[column as 'name' | 'cost'];
             if (typeof aValue === 'string' && typeof bValue === 'string') {
                 return aValue.localeCompare(bValue) * (sortConfig.direction === 'asc' ? 1 : -1);
             }
@@ -134,12 +136,20 @@ export default function InventoryTab({ data, searchTerm, onFileUpload, onCloudIm
                 return (aValue - bValue) * (sortConfig.direction === 'asc' ? 1 : -1);
             }
         }
+        
+        // Handle zone properties
+        if (column.startsWith('stock_') || column.startsWith('drr_')) {
+            const aValue = a[column as keyof InventoryItem] as number || 0;
+            const bValue = b[column as keyof InventoryItem] as number || 0;
+            return (aValue - bValue) * (sortConfig.direction === 'asc' ? 1 : -1);
+        }
+
 
         // Handle complex/derived properties
         let aValue = 0;
         let bValue = 0;
 
-        switch(sortConfig.column) {
+        switch(column) {
             case 'cover':
                 aValue = a.drr > 0 ? ((a.stock_kol || 0) + (a.stock_pith || 0) + (a.stock_har || 0) + (a.stock_blr || 0)) / a.drr : 999;
                 bValue = b.drr > 0 ? ((b.stock_kol || 0) + (b.stock_pith || 0) + (b.stock_har || 0) + (b.stock_blr || 0)) / b.drr : 999;
@@ -261,10 +271,14 @@ export default function InventoryTab({ data, searchTerm, onFileUpload, onCloudIm
                         <TableRow className="text-[9px] bg-muted/50">
                             <TableHead className="sticky-col bg-card border-r z-20"></TableHead>
                             <TableHead className="text-center">(₹)</TableHead>
-                            <TableHead className="text-center">Stock</TableHead><TableHead className="text-center border-r loc-group-border">DRR</TableHead>
-                            <TableHead className="text-center">Stock</TableHead><TableHead className="text-center border-r loc-group-border">DRR</TableHead>
-                            <TableHead className="text-center">Stock</TableHead><TableHead className="text-center border-r loc-group-border">DRR</TableHead>
-                            <TableHead className="text-center">Stock</TableHead><TableHead className="text-center border-r loc-group-border">DRR</TableHead>
+                            <TableHead className="text-center cursor-pointer" onClick={() => requestSort('stock_kol')}>Stock {getSortIcon('stock_kol')}</TableHead>
+                            <TableHead className="text-center border-r loc-group-border cursor-pointer" onClick={() => requestSort('drr_kol')}>DRR {getSortIcon('drr_kol')}</TableHead>
+                            <TableHead className="text-center cursor-pointer" onClick={() => requestSort('stock_pith')}>Stock {getSortIcon('stock_pith')}</TableHead>
+                            <TableHead className="text-center border-r loc-group-border cursor-pointer" onClick={() => requestSort('drr_pith')}>DRR {getSortIcon('drr_pith')}</TableHead>
+                            <TableHead className="text-center cursor-pointer" onClick={() => requestSort('stock_har')}>Stock {getSortIcon('stock_har')}</TableHead>
+                            <TableHead className="text-center border-r loc-group-border cursor-pointer" onClick={() => requestSort('drr_har')}>DRR {getSortIcon('drr_har')}</TableHead>
+                            <TableHead className="text-center cursor-pointer" onClick={() => requestSort('stock_blr')}>Stock {getSortIcon('stock_blr')}</TableHead>
+                            <TableHead className="text-center border-r loc-group-border cursor-pointer" onClick={() => requestSort('drr_blr')}>DRR {getSortIcon('drr_blr')}</TableHead>
                             <TableHead className="text-center">(Days)</TableHead>
                             <TableHead className="text-center">(30d)</TableHead>
                             <TableHead className="text-center">(Units)</TableHead>
