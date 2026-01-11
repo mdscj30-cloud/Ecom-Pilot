@@ -35,6 +35,7 @@ export default function RecommendationsTab({
       const stockDays = (item.drr || 0) > 0 ? stockTotal / (item.drr || 1) : Infinity;
       const revenue = item.price * item.orders;
       const roas = item.spend > 0 ? revenue / item.spend : Infinity;
+      const returnsPercent = item.orders > 0 ? (item.returns / item.orders) * 100 : 0;
 
       let inventoryAction = "OK";
       if (stockDays < 7) inventoryAction = "Restock";
@@ -61,6 +62,9 @@ export default function RecommendationsTab({
         remarks: remarks.length > 0 ? remarks.join(' ') : 'Performance is stable.',
         stockDays,
         netValue: item.price - item.shipping - item.commission,
+        roas,
+        returns: returnsPercent,
+        reviews: item.reviews || 0,
       };
     });
   }, [inventoryData, roasThreshold]);
@@ -144,6 +148,9 @@ export default function RecommendationsTab({
                 </TableHead>
                 <TableHead className="text-center cursor-pointer" onClick={() => requestSort('stockDays')}>Inv. Health {getSortIcon('stockDays')}</TableHead>
                 <TableHead className="text-center cursor-pointer" onClick={() => requestSort('netValue')}>Net Value {getSortIcon('netValue')}</TableHead>
+                <TableHead className="text-center cursor-pointer" onClick={() => requestSort('roas')}>ROAS {getSortIcon('roas')}</TableHead>
+                <TableHead className="text-center cursor-pointer" onClick={() => requestSort('returns')}>Returns % {getSortIcon('returns')}</TableHead>
+                <TableHead className="text-center cursor-pointer" onClick={() => requestSort('reviews')}>Reviews {getSortIcon('reviews')}</TableHead>
                 <TableHead className="text-center bg-blue-500/10 cursor-pointer" onClick={() => requestSort('inventoryAction')}>
                   Inventory Action {getSortIcon('inventoryAction')}
                 </TableHead>
@@ -167,6 +174,9 @@ export default function RecommendationsTab({
                         </div>
                     </TableCell>
                     <TableCell className="text-center font-mono">₹{rec.netValue.toFixed(0)}</TableCell>
+                    <TableCell className="text-center font-bold">{isFinite(rec.roas) ? rec.roas.toFixed(2) : 'N/A'}</TableCell>
+                    <TableCell className="text-center">{rec.returns.toFixed(1)}%</TableCell>
+                    <TableCell className="text-center">{rec.reviews}</TableCell>
                     <TableCell className="p-3 text-center bg-blue-500/10">
                         {getActionBadge(rec.inventoryAction)}
                     </TableCell>
@@ -178,7 +188,7 @@ export default function RecommendationsTab({
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={6} className="h-48 text-center text-muted-foreground">
+                  <TableCell colSpan={9} className="h-48 text-center text-muted-foreground">
                     No data available to generate actions. Please import your inventory data.
                   </TableCell>
                 </TableRow>
@@ -190,5 +200,3 @@ export default function RecommendationsTab({
     </div>
   );
 }
-
-    

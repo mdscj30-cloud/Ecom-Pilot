@@ -81,6 +81,9 @@ export interface Recommendation {
   remarks: string;
   stockDays: number;
   netValue: number;
+  roas: number;
+  returns: number;
+  reviews: number;
 }
 
 export interface MatrixData {
