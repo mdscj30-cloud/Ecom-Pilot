@@ -38,6 +38,7 @@ export interface B2BInventoryItem {
   b2b_price: number;
   stock: number;
   inbound_stock: number;
+  drr: number;
 }
 
 

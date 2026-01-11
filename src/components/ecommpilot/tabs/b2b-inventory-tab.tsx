@@ -16,6 +16,8 @@ import { Button } from "@/components/ui/button";
 import { Upload, Cloud, Download, ArrowUpDown } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 
 interface B2BInventoryTabProps {
   data: B2BInventoryItem[];
@@ -61,12 +63,26 @@ export default function B2BInventoryTab({ data, searchTerm, onFileUpload, onClou
     return sortConfig.direction === 'desc' ? '▼' : '▲';
   };
 
+  const getAction = (doc: number) => {
+    if (doc < 15) return <Badge variant="destructive">Restock</Badge>;
+    if (doc > 60) return <Badge variant="secondary" className="bg-amber-500/20 text-amber-700">Overstocked</Badge>;
+    return <Badge variant="default" className="bg-green-600/20 text-green-700">Healthy</Badge>;
+  };
+  
   const sortedData = useMemo(() => {
     let sortableItems = [...filteredData];
     if (sortConfig.column !== null) {
       sortableItems.sort((a, b) => {
-        const aValue = a[sortConfig.column as keyof B2BInventoryItem];
-        const bValue = b[sortConfig.column as keyof B2BInventoryItem];
+        let aValue, bValue;
+
+        if (sortConfig.column === 'doc') {
+            aValue = a.drr > 0 ? a.stock / a.drr : Infinity;
+            bValue = b.drr > 0 ? b.stock / b.drr : Infinity;
+        } else {
+            aValue = a[sortConfig.column as keyof B2BInventoryItem];
+            bValue = b[sortConfig.column as keyof B2BInventoryItem];
+        }
+
 
         if (typeof aValue === 'string' && typeof bValue === 'string') {
           return aValue.localeCompare(bValue) * (sortConfig.direction === 'asc' ? 1 : -1);
@@ -135,20 +151,35 @@ export default function B2BInventoryTab({ data, searchTerm, onFileUpload, onClou
                             <TableHead className="text-right cursor-pointer" onClick={() => requestSort('b2b_price')}>B2B Price {getSortIcon('b2b_price')}</TableHead>
                             <TableHead className="text-right cursor-pointer bg-primary/10" onClick={() => requestSort('stock')}>Stock {getSortIcon('stock')}</TableHead>
                             <TableHead className="text-right cursor-pointer" onClick={() => requestSort('inbound_stock')}>Inbound {getSortIcon('inbound_stock')}</TableHead>
+                            <TableHead className="text-right cursor-pointer" onClick={() => requestSort('drr')}>DRR {getSortIcon('drr')}</TableHead>
+                            <TableHead className="text-right cursor-pointer" onClick={() => requestSort('doc')}>DOC {getSortIcon('doc')}</TableHead>
+                            <TableHead className="text-center">Action</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody className="text-xs">
-                        {sortedData.map(item => (
-                            <TableRow key={item.id}>
-                                <TableCell className="font-medium">{item.platform}</TableCell>
-                                <TableCell className="font-medium text-foreground">{item.sku_name}</TableCell>
-                                <TableCell className="font-mono">{item.asin}</TableCell>
-                                <TableCell className="text-right font-mono">₹{item.listing_price.toFixed(2)}</TableCell>
-                                <TableCell className="text-right font-mono text-primary font-bold">₹{item.b2b_price.toFixed(2)}</TableCell>
-                                <TableCell className="text-right font-bold bg-primary/10">{item.stock.toLocaleString()}</TableCell>
-                                <TableCell className="text-right text-blue-500 font-bold">{item.inbound_stock > 0 ? item.inbound_stock.toLocaleString() : '-'}</TableCell>
-                            </TableRow>
-                        ))}
+                        {sortedData.map(item => {
+                            const doc = item.drr > 0 ? item.stock / item.drr : Infinity;
+                            return (
+                                <TableRow key={item.id}>
+                                    <TableCell className="font-medium">{item.platform}</TableCell>
+                                    <TableCell className="font-medium text-foreground">{item.sku_name}</TableCell>
+                                    <TableCell className="font-mono">{item.asin}</TableCell>
+                                    <TableCell className="text-right font-mono">₹{item.listing_price.toFixed(2)}</TableCell>
+                                    <TableCell className="text-right font-mono text-primary font-bold">₹{item.b2b_price.toFixed(2)}</TableCell>
+                                    <TableCell className="text-right font-bold bg-primary/10">{item.stock.toLocaleString()}</TableCell>
+                                    <TableCell className="text-right text-blue-500 font-bold">{item.inbound_stock > 0 ? item.inbound_stock.toLocaleString() : '-'}</TableCell>
+                                    <TableCell className="text-right">{item.drr}</TableCell>
+                                    <TableCell 
+                                        className={cn("text-right font-bold", 
+                                            doc < 15 ? 'text-destructive' : doc > 60 ? 'text-amber-600' : 'text-green-600'
+                                        )}
+                                    >
+                                        {isFinite(doc) ? `${Math.round(doc)}d` : '∞'}
+                                    </TableCell>
+                                    <TableCell className="text-center">{getAction(doc)}</TableCell>
+                                </TableRow>
+                            )
+                        })}
                     </TableBody>
                 </Table>
             </div>

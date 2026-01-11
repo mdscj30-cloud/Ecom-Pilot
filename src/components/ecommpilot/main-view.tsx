@@ -223,6 +223,7 @@ export default function MainView() {
               b2b_price: parseFloat(item.b2b_price) || 0,
               stock: parseInt(item.stock, 10) || 0,
               inbound_stock: parseInt(item.inbound_stock, 10) || 0,
+              drr: parseInt(item.drr, 10) || 0,
             };
         });
         if (importedData.length === 0 || !importedData.some(d => d.sku_name)) {

@@ -1,3 +1,3 @@
-Platform,SKU Name,ASIN,Listing Price,B2B Price,Stock,Inbound Stock
-Amazon,"Sample B2B Product 1",B08EXAMPLE,1200,1050,150,50
-Flipkart,"Sample B2B Product 2",FSNEXAMP,950,800,300,0
+Platform,SKU Name,ASIN,Listing Price,B2B Price,Stock,Inbound Stock,DRR
+Amazon,Sample B2B Product 1,B08SAMPLE1,1200,950,50,10,5
+Flipkart,Sample B2B Product 2,FSN7SAMPLE2,1500,1100,30,0,2
