@@ -5,7 +5,7 @@ import { Line, ComposedChart, XAxis, YAxis, CartesianGrid, Legend, Tooltip, Bar,
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
 import { Button } from '@/components/ui/button';
-import { Calendar as CalendarIcon, Upload, Cloud, Download, ArrowUp, ArrowDown, ChevronDown, ChevronRight } from "lucide-react";
+import { Calendar as CalendarIcon, Upload, Cloud, Download, ArrowUp, ArrowDown, ChevronDown, ChevronRight, GitCompareArrows } from "lucide-react";
 import React, { useMemo, useState } from 'react';
 import type { ProcessedSheetData } from '@/lib/types';
 import {
@@ -19,11 +19,13 @@ import {
 import { Tooltip as UiTooltip, TooltipContent as UiTooltipContent, TooltipProvider, TooltipTrigger as UiTooltipTrigger } from '@/components/ui/tooltip';
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { format, startOfToday, endOfToday } from 'date-fns';
+import { format, startOfToday, endOfToday, subDays } from 'date-fns';
 import KpiCard from '../kpi-card';
 import { cn } from '@/lib/utils';
 import { DateRange } from 'react-day-picker';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 
 
 interface PnlTabProps {
@@ -36,6 +38,7 @@ const chartConfig = {
   gmv: { label: "GMV", color: "hsl(var(--chart-1))" },
   adsSpent: { label: "Ads Spent", color: "hsl(var(--chart-2))" },
   tacos: { label: "TACOS", color: "hsl(var(--chart-3))" },
+  compare_gmv: { label: "Comp GMV", color: "hsl(var(--foreground))" }
 };
 
 const COLORS = ["hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))"];
@@ -45,46 +48,47 @@ type SortKey = 'date' | 'gmv' | 'adsSpent' | 'tacos' | 'units' | 'avgAsp';
 type ChannelSortKey = 'channel' | 'gmv' | 'adsSpent' | 'tacos' | 'units';
 
 export default function PnlTab({ data, onFileUpload, onCloudImport }: PnlTabProps) {
-
+  
+  const [isComparing, setIsComparing] = useState(false);
   const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
      if (data && data.length > 0) {
-        const minDate = data.reduce((min, p) => p.date < min ? p.date : min, data[0].date);
         const maxDate = data.reduce((max, p) => p.date > max ? p.date : max, data[0].date);
-        return { from: minDate, to: maxDate };
+        return { from: subDays(maxDate, 30), to: maxDate };
     }
-    return { from: startOfToday(), to: endOfToday() };
+    return { from: subDays(startOfToday(), 30), to: endOfToday() };
   });
+
+  const [compareDateRange, setCompareDateRange] = useState<DateRange | undefined>(() => {
+    if (dateRange?.from && dateRange?.to) {
+      const diff = dateRange.to.getTime() - dateRange.from.getTime();
+      return { from: new Date(dateRange.from.getTime() - diff), to: new Date(dateRange.to.getTime() - diff) };
+    }
+    return { from: subDays(startOfToday(), 60), to: subDays(endOfToday(), 30) };
+  });
+
 
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' });
   const [channelSortConfig, setChannelSortConfig] = useState<{ key: ChannelSortKey; direction: 'asc' | 'desc' }>({ key: 'gmv', direction: 'desc' });
   const [openCollapsibles, setOpenCollapsibles] = useState<string[]>([]);
   
   React.useEffect(() => {
-    if (data && data.length > 0) {
-      const minDate = data.reduce((min, p) => p.date < min ? p.date : min, data[0].date);
+    if (data && data.length > 0 && (!dateRange?.from || !dateRange.to)) {
       const maxDate = data.reduce((max, p) => p.date > max ? p.date : max, data[0].date);
+      const minDate = data.reduce((min, p) => p.date < min ? p.date : min, data[0].date);
       setDateRange({ from: minDate, to: maxDate });
     }
-  }, [data]);
-
-  const filteredData = useMemo(() => {
-    if (!data) return [];
-    return data.filter(d => 
-      (!dateRange?.from || d.date >= dateRange.from) &&
-      (!dateRange?.to || d.date <= dateRange.to)
-    );
   }, [data, dateRange]);
-
-  const { dailyKpis, dailyChartData, dailyTableData, channelPerformance } = useMemo(() => {
+  
+  const processPeriodData = (periodData: ProcessedSheetData[]) => {
     const kpis = { totalGmv: 0, totalAds: 0, totalTacos: 0, totalUnits: 0, avgAsp: 0 };
-    if (filteredData.length === 0) {
-      return { dailyKpis: kpis, dailyChartData: [], dailyTableData: [], channelPerformance: [] };
+    if (periodData.length === 0) {
+      return { kpis, chartData: [], tableData: [], channelPerformance: [] };
     }
 
     const dailyDataMap: { [key: string]: { date: Date, platforms: { [key: string]: ProcessedSheetData } } } = {};
     const channelDataMap: { [key: string]: { gmv: number; adsSpent: number; units: number } } = {};
     
-    filteredData.forEach(d => {
+    periodData.forEach(d => {
       const day = format(d.date, 'yyyy-MM-dd');
       if (!dailyDataMap[day]) {
         dailyDataMap[day] = { date: d.date, platforms: {} };
@@ -167,9 +171,49 @@ export default function PnlTab({ data, onFileUpload, onCloudImport }: PnlTabProp
         return 0;
     });
 
+    return { kpis, chartData: chartData.sort((a, b) => a.date.getTime() - b.date.getTime()), tableData: sortedTableData, channelPerformance: sortedChannelData };
+  };
 
-    return { dailyKpis: kpis, dailyChartData: chartData.sort((a, b) => a.date.getTime() - b.date.getTime()), dailyTableData: sortedTableData, channelPerformance: sortedChannelData };
-  }, [filteredData, sortConfig, channelSortConfig]);
+  const { currentPeriod, comparisonPeriod } = useMemo(() => {
+    if (!data) return { currentPeriod: processPeriodData([]), comparisonPeriod: processPeriodData([]) };
+
+    const currentData = data.filter(d => 
+        (!dateRange?.from || d.date >= dateRange.from) &&
+        (!dateRange?.to || d.date <= dateRange.to)
+    );
+
+    const comparisonData = isComparing ? data.filter(d =>
+        (!compareDateRange?.from || d.date >= compareDateRange.from) &&
+        (!compareDateRange?.to || d.date <= compareDateRange.to)
+    ) : [];
+    
+    return {
+        currentPeriod: processPeriodData(currentData),
+        comparisonPeriod: processPeriodData(comparisonData),
+    };
+  }, [data, dateRange, compareDateRange, isComparing, sortConfig, channelSortConfig]);
+  
+  const mergedChartData = useMemo(() => {
+    if (!isComparing) return currentPeriod.chartData;
+    
+    const maxLength = Math.max(currentPeriod.chartData.length, comparisonPeriod.chartData.length);
+    const merged = [];
+
+    for (let i=0; i<maxLength; i++) {
+        const current = currentPeriod.chartData[i];
+        const compare = comparisonPeriod.chartData[i];
+        merged.push({
+            day: current?.day || `Day ${i+1}`,
+            gmv: current?.gmv,
+            adsSpent: current?.adsSpent,
+            tacos: current?.tacos,
+            compare_gmv: compare?.gmv,
+            compare_adsSpent: compare?.adsSpent,
+            compare_tacos: compare?.tacos,
+        });
+    }
+    return merged;
+  }, [currentPeriod.chartData, comparisonPeriod.chartData, isComparing]);
 
   const requestSort = (key: SortKey) => {
     let direction: 'asc' | 'desc' = 'desc';
@@ -200,6 +244,27 @@ export default function PnlTab({ data, onFileUpload, onCloudImport }: PnlTabProp
   const toggleCollapsible = (date: string) => {
     setOpenCollapsibles(prev => 
       prev.includes(date) ? prev.filter(d => d !== date) : [...prev, date]
+    );
+  };
+
+  const renderKpiCard = (title: string, current: number, compare: number, format: (val:number) => string, higherIsBetter = true) => {
+    const diff = isComparing && compare > 0 ? ((current - compare) / compare) * 100 : 0;
+    const diffColor = higherIsBetter ? (diff >= 0 ? 'text-green-600' : 'text-destructive') : (diff < 0 ? 'text-green-600' : 'text-destructive');
+    return (
+        <Card>
+            <CardHeader className="p-4 pb-0">
+                <CardTitle className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex justify-between items-center">
+                   {title}
+                   {isComparing && <span className={cn("text-xs font-bold", diffColor)}>{diff.toFixed(1)}%</span>}
+                </CardTitle>
+            </CardHeader>
+            <CardContent className="p-4 pt-1">
+                <h2 className="text-xl font-bold text-foreground mt-1">
+                    {format(current)}
+                </h2>
+                {isComparing && <p className="text-xs text-muted-foreground mt-1">vs {format(compare)}</p>}
+            </CardContent>
+        </Card>
     );
   };
 
@@ -255,14 +320,18 @@ export default function PnlTab({ data, onFileUpload, onCloudImport }: PnlTabProp
                         Operational view for daily performance and ad spend efficiency.
                     </CardDescription>
                 </div>
-                 <div className="flex items-center gap-2">
+                 <div className="flex items-center gap-2 flex-wrap justify-end">
+                    <div className="flex items-center gap-2">
+                        <Switch id="compare-mode" checked={isComparing} onCheckedChange={setIsComparing} />
+                        <Label htmlFor="compare-mode" className="flex items-center gap-1.5"><GitCompareArrows className="w-4 h-4" /> Compare</Label>
+                    </div>
                     <Popover>
                         <PopoverTrigger asChild>
                              <Button
                                 id="date"
                                 variant={"outline"}
                                 className={cn(
-                                "w-full sm:w-[300px] justify-start text-left font-normal",
+                                "w-full sm:w-[260px] justify-start text-left font-normal h-9",
                                 !dateRange && "text-muted-foreground"
                                 )}
                             >
@@ -292,6 +361,44 @@ export default function PnlTab({ data, onFileUpload, onCloudImport }: PnlTabProp
                             />
                         </PopoverContent>
                     </Popover>
+                    {isComparing && (
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <Button
+                                    id="compare-date"
+                                    variant={"outline"}
+                                    className={cn(
+                                    "w-full sm:w-[260px] justify-start text-left font-normal h-9",
+                                    !compareDateRange && "text-muted-foreground"
+                                    )}
+                                >
+                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                    {compareDateRange?.from ? (
+                                    compareDateRange.to ? (
+                                        <>
+                                        {format(compareDateRange.from, "LLL dd, y")} -{" "}
+                                        {format(compareDateRange.to, "LLL dd, y")}
+                                        </>
+                                    ) : (
+                                        format(compareDateRange.from, "LLL dd, y")
+                                    )
+                                    ) : (
+                                    <span>Pick a compare period</span>
+                                    )}
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="end">
+                                <Calendar
+                                    initialFocus
+                                    mode="range"
+                                    defaultMonth={compareDateRange?.from}
+                                    selected={compareDateRange}
+                                    onSelect={setCompareDateRange}
+                                    numberOfMonths={2}
+                                />
+                            </PopoverContent>
+                        </Popover>
+                    )}
                     <TooltipProvider>
                          <UiTooltip>
                             <UiTooltipTrigger asChild>
@@ -325,11 +432,11 @@ export default function PnlTab({ data, onFileUpload, onCloudImport }: PnlTabProp
       </Card>
       
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-            <KpiCard title="Total GMV" value={`₹${dailyKpis.totalGmv.toLocaleString(undefined, {maximumFractionDigits: 0})}`} />
-            <KpiCard title="Total Ads" value={`₹${dailyKpis.totalAds.toLocaleString(undefined, {maximumFractionDigits: 0})}`} />
-            <KpiCard title="Avg TACOS" value={`${(dailyKpis.totalTacos * 100).toFixed(2)}%`} />
-            <KpiCard title="Total Units" value={dailyKpis.totalUnits.toLocaleString()} />
-            <KpiCard title="Avg ASP" value={`₹${dailyKpis.avgAsp.toFixed(0)}`} />
+            {renderKpiCard("Total GMV", currentPeriod.kpis.totalGmv, comparisonPeriod.kpis.totalGmv, (val) => `₹${val.toLocaleString(undefined, {maximumFractionDigits: 0})}`)}
+            {renderKpiCard("Total Ads", currentPeriod.kpis.totalAds, comparisonPeriod.kpis.totalAds, (val) => `₹${val.toLocaleString(undefined, {maximumFractionDigits: 0})}`, false)}
+            {renderKpiCard("Avg TACOS", currentPeriod.kpis.totalTacos, comparisonPeriod.kpis.totalTacos, (val) => `${(val * 100).toFixed(2)}%`, false)}
+            {renderKpiCard("Total Units", currentPeriod.kpis.totalUnits, comparisonPeriod.kpis.totalUnits, (val) => val.toLocaleString())}
+            {renderKpiCard("Avg ASP", currentPeriod.kpis.avgAsp, comparisonPeriod.kpis.avgAsp, (val) => `₹${val.toFixed(0)}`)}
         </div>
       
         <Card>
@@ -339,15 +446,16 @@ export default function PnlTab({ data, onFileUpload, onCloudImport }: PnlTabProp
             </CardHeader>
             <CardContent>
               <ChartContainer config={chartConfig} className="h-[300px] w-full">
-                <ComposedChart data={dailyChartData}>
+                <ComposedChart data={mergedChartData}>
                     <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="day" fontSize={12} tickFormatter={(tick) => format(new Date(dailyChartData[0].date.getFullYear(), Number(tick.split('/')[1])-1, Number(tick.split('/')[0])), "MMM d")} />
-                    <YAxis yAxisId="left" label={{ value: 'Amount (₹)', angle: -90, position: 'insideLeft' }} stroke="hsl(var(--chart-1))" tickFormatter={(value) => `₹${(value as number / 100000).toFixed(0)}L`} />
+                    <XAxis dataKey="day" fontSize={12} />
+                    <YAxis yAxisId="left" label={{ value: 'Amount (₹)', angle: -90, position: 'insideLeft' }} stroke="hsl(var(--chart-1))" tickFormatter={(value) => `₹${(value as number / 1000).toFixed(0)}k`} />
                     <YAxis yAxisId="right" orientation="right" label={{ value: 'TACOS (%)', angle: -90, position: 'insideRight' }} stroke="hsl(var(--chart-3))" tickFormatter={(value) => `${(value as number * 100).toFixed(0)}%`}/>
                     <Tooltip content={<ChartTooltipContent formatter={(value, name) => name === 'tacos' ? `${(Number(value) * 100).toFixed(2)}%` : `₹${Number(value).toLocaleString()}`} />} />
                     <Legend />
                     <Bar dataKey="gmv" yAxisId="left" fill="var(--color-gmv)" name="GMV" />
                     <Bar dataKey="adsSpent" yAxisId="left" fill="var(--color-adsSpent)" name="Ads Spent" />
+                    {isComparing && <Line type="monotone" dataKey="compare_gmv" yAxisId="left" stroke="var(--color-compare_gmv)" strokeWidth={2} name="Comp GMV" dot={false} strokeDasharray="5 5" />}
                     <Line type="monotone" dataKey="tacos" yAxisId="right" stroke="var(--color-tacos)" strokeWidth={2} name="TACOS" dot={false} />
                 </ComposedChart>
               </ChartContainer>
@@ -372,12 +480,12 @@ export default function PnlTab({ data, onFileUpload, onCloudImport }: PnlTabProp
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {channelPerformance.map(item => (
+                            {currentPeriod.channelPerformance.map(item => (
                                 <TableRow key={item.channel}>
                                     <TableCell className="font-medium">{item.channel}</TableCell>
                                     <TableCell className="text-right">₹{item.gmv.toLocaleString(undefined, {maximumFractionDigits: 0})}</TableCell>
                                     <TableCell className="text-right">₹{item.adsSpent.toLocaleString(undefined, {maximumFractionDigits: 0})}</TableCell>
-                                    <TableCell className={cn("text-right", item.tacos > dailyKpis.totalTacos ? "text-destructive" : "text-green-600")}>{(item.tacos * 100).toFixed(2)}%</TableCell>
+                                    <TableCell className={cn("text-right", item.tacos > currentPeriod.kpis.totalTacos ? "text-destructive" : "text-green-600")}>{(item.tacos * 100).toFixed(2)}%</TableCell>
                                     <TableCell className="text-right">{item.units.toLocaleString()}</TableCell>
                                 </TableRow>
                             ))}
@@ -395,8 +503,8 @@ export default function PnlTab({ data, onFileUpload, onCloudImport }: PnlTabProp
                         <ChartContainer config={{}} className="h-[200px] w-full">
                             <PieChart>
                                 <Tooltip content={<ChartTooltipContent hideLabel />} />
-                                <Pie data={channelPerformance} dataKey="gmv" nameKey="channel" cx="50%" cy="50%" outerRadius={80} label>
-                                    {channelPerformance.map((entry, index) => (
+                                <Pie data={currentPeriod.channelPerformance} dataKey="gmv" nameKey="channel" cx="50%" cy="50%" outerRadius={80} label>
+                                    {currentPeriod.channelPerformance.map((entry, index) => (
                                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                     ))}
                                 </Pie>
@@ -411,13 +519,13 @@ export default function PnlTab({ data, onFileUpload, onCloudImport }: PnlTabProp
                     </CardHeader>
                     <CardContent>
                          <ChartContainer config={chartConfig} className="h-[200px] w-full">
-                            <BarChart data={channelPerformance} layout="vertical" margin={{left: 100}}>
+                            <BarChart data={currentPeriod.channelPerformance} layout="vertical" margin={{left: 100}}>
                                 <CartesianGrid strokeDasharray="3 3" />
                                 <XAxis type="number" tickFormatter={(value) => `${(value as number * 100).toFixed(0)}%`}/>
                                 <YAxis type="category" dataKey="channel" width={100} fontSize={12} />
                                 <Tooltip content={<ChartTooltipContent formatter={(value) => `${(Number(value) * 100).toFixed(2)}%`}/>}/>
                                 <Bar dataKey="tacos" fill="var(--color-tacos)">
-                                    {channelPerformance.map((entry, index) => (
+                                    {currentPeriod.channelPerformance.map((entry, index) => (
                                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                     ))}
                                 </Bar>
@@ -446,14 +554,14 @@ export default function PnlTab({ data, onFileUpload, onCloudImport }: PnlTabProp
                             <TableHead className="cursor-pointer text-right" onClick={() => requestSort('avgAsp')}>Avg ASP {getSortIcon('avgAsp')}</TableHead>
                         </TableRow>
                     </TableHeader>
-                    <TableBody>
-                        {dailyTableData.map(item => {
+                    
+                        {currentPeriod.tableData.map(item => {
                             const dateKey = format(item.date, 'yyyy-MM-dd');
                             const isOpen = openCollapsibles.includes(dateKey);
                             return (
-                                <Collapsible key={dateKey} asChild open={isOpen} onOpenChange={() => toggleCollapsible(dateKey)}>
-                                    <React.Fragment>
-                                        <TableRow className="cursor-pointer">
+                                <Collapsible asChild key={dateKey} open={isOpen} onOpenChange={() => toggleCollapsible(dateKey)}>
+                                    <tbody className="[&_tr:last-child]:border-0">
+                                        <TableRow className="cursor-pointer" onClick={() => toggleCollapsible(dateKey)}>
                                             <TableCell>
                                                 <CollapsibleTrigger asChild>
                                                     <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -500,16 +608,14 @@ export default function PnlTab({ data, onFileUpload, onCloudImport }: PnlTabProp
                                                 </td>
                                             </tr>
                                         </CollapsibleContent>
-                                    </React.Fragment>
+                                    </tbody>
                                 </Collapsible>
                             )
                         })}
-                    </TableBody>
+                    
                 </Table>
             </CardContent>
         </Card>
     </div>
   );
 }
-
-    
