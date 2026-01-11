@@ -1,0 +1,4 @@
+date,platform_id,campaign_id,ad_group_id,sku_code,impressions,clicks,orders,gmv,ads_spent,ctr,cvr,roas,tacos,current_stock,drr,stock_cover_days,decision,reason_codes,campaign_status,ad_group_status,account_id,phase
+2026-01-08,meesho,MEE_DIAPER_M_JAN25,DIAPER_M_PK20,ADP-M-20,24500,920,63,18900,5200,0.037,0.068,3.63,0.27,820,78,10.5,SCALE,"ROAS_ABOVE_TARGET,STOCK_OK",active,active,meesho_ads_01,Phase 3
+2026-01-08,amazon,AMA_BABYWIPE_Q1,WIPE_SENSITIVE_PK80,ABW-S-80,15000,300,15,4500,2000,0.02,0.05,2.25,0.44,1500,50,30,CUT,ROAS_BELOW_MIN,active,active,amazon_ads_01,Launch
+2026-01-08,meesho,MEE_DIAPER_M_JAN25,DIAPER_L_PK50,ADP-L-50,500,10,0,0,150,0.02,0,0,1,40,10,4,PAUSE,STOCK_BELOW_PAUSE_THRESHOLD,active,paused,meesho_ads_01,Phase 3

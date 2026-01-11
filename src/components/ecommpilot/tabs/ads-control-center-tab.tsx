@@ -13,12 +13,7 @@ import type {
   ActionLog
 } from '@/lib/types';
 import {
-  campaigns,
-  adGroups,
-  adsDailyMetrics,
-  inventorySnapshots,
   controlThresholds as initialControlThresholds,
-  decisionEngineOutputs,
   adAlerts,
   actionLogs
 } from '@/lib/ads-data';
@@ -29,7 +24,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { Flame, GitCommit, AlertOctagon, Bot, ChevronsRight, Edit, Save, X, RadioTower, Zap, CircleDollarSign, ArrowUp, ArrowDown, PauseCircle, PlayCircle, MinusCircle } from 'lucide-react';
+import { Flame, GitCommit, AlertOctagon, Bot, ChevronsRight, Edit, Save, X, RadioTower, Zap, CircleDollarSign, ArrowUp, ArrowDown, PauseCircle, PlayCircle, MinusCircle, Upload, Cloud, Download } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
@@ -38,7 +33,26 @@ import {
 } from "@/components/ui/tooltip";
 
 
-export default function AdsControlCenterTab() {
+interface AdsControlCenterTabProps {
+    campaigns: Campaign[];
+    adGroups: AdGroup[];
+    adsDailyMetrics: AdsDailyMetrics[];
+    inventorySnapshots: InventorySnapshot[];
+    decisionEngineOutputs: DecisionEngineOutput[];
+    onFileUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
+    onCloudImport: () => void;
+}
+
+
+export default function AdsControlCenterTab({
+    campaigns,
+    adGroups,
+    adsDailyMetrics,
+    inventorySnapshots,
+    decisionEngineOutputs,
+    onFileUpload,
+    onCloudImport,
+}: AdsControlCenterTabProps) {
   const [controlThresholds, setControlThresholds] = useState<ControlThresholds[]>(initialControlThresholds);
   const [editingThresholdId, setEditingThresholdId] = useState<string | null>(null);
   const [editedThresholds, setEditedThresholds] = useState<Partial<ControlThresholds>>({});
@@ -60,7 +74,7 @@ export default function AdsControlCenterTab() {
         decision,
       };
     });
-  }, []);
+  }, [campaigns, adGroups, adsDailyMetrics, inventorySnapshots, decisionEngineOutputs]);
 
   const overallKpis = useMemo(() => {
     return combinedData.reduce((acc, item) => {
@@ -106,19 +120,48 @@ export default function AdsControlCenterTab() {
   return (
     <div className="space-y-6">
         <Card>
-            <CardHeader>
-                 <CardTitle className="flex items-center gap-2">
-                    <RadioTower className="w-6 h-6 text-primary" />
-                    Ads Control Center
-                </CardTitle>
-                <CardDescription>Real-time, rules-based ad decisions across all platforms.</CardDescription>
+            <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                    <CardTitle className="flex items-center gap-2">
+                        <RadioTower className="w-6 h-6 text-primary" />
+                        Ads Control Center
+                    </CardTitle>
+                    <CardDescription>Real-time, rules-based ad decisions across all platforms.</CardDescription>
+                </div>
+                <div className="flex items-center gap-2">
+                    <TooltipProvider>
+                         <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button variant="outline" size="icon" className="h-9 w-9" asChild>
+                                    <a href="/ads-template.csv" download>
+                                        <Download className="h-4 w-4" />
+                                    </a>
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent><p>Download Template</p></TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => document.getElementById('ads-upload')?.click()}><Upload className="h-4 w-4" /></Button>
+                            </TooltipTrigger>
+                            <TooltipContent><p>Import from .xlsx</p></TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button variant="outline" size="icon" className="h-9 w-9" onClick={onCloudImport}><Cloud className="h-4 w-4" /></Button>
+                            </TooltipTrigger>
+                            <TooltipContent><p>Import from Google Sheet</p></TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
+                    <input type="file" id="ads-upload" className="hidden" accept=".xlsx, .xls, .csv" onChange={onFileUpload}/>
+                </div>
             </CardHeader>
         </Card>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <KpiCard title="Total Ad Spend" value={`₹${overallKpis.totalSpend.toLocaleString()}`} />
             <KpiCard title="Total GMV" value={`₹${overallKpis.totalGmv.toLocaleString()}`} />
-            <KpiCard title="Blended ROAS" value={(overallKpis.totalGmv / overallKpis.totalSpend).toFixed(2)} className="text-primary" />
+            <KpiCard title="Blended ROAS" value={(overallKpis.totalGmv / overallKpis.totalSpend || 0).toFixed(2)} className="text-primary" />
         </div>
 
         <Card>

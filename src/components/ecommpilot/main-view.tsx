@@ -24,9 +24,21 @@ import type {
   Recommendation,
   GrowthData,
   B2BInventoryItem,
+  Campaign,
+  AdGroup,
+  AdsDailyMetrics,
+  InventorySnapshot,
+  DecisionEngineOutput,
 } from "@/lib/types";
 import { masterData } from "@/lib/data";
 import { growthMasterData } from "@/lib/growth-data";
+import {
+  campaigns as initialCampaigns,
+  adGroups as initialAdGroups,
+  adsDailyMetrics as initialAdsDailyMetrics,
+  inventorySnapshots as initialInventorySnapshots,
+  decisionEngineOutputs as initialDecisionEngineOutputs,
+} from "@/lib/ads-data";
 
 import { format, parse, isValid } from 'date-fns';
 
@@ -53,11 +65,12 @@ const channelIcons = {
 };
 
 // --- IMPORTANT: Paste your Google Sheet URLs here ---
-const GOOGLE_SHEET_URLS: Record<'inventory' | 'b2b' | 'daily' | 'growth', string> = {
+const GOOGLE_SHEET_URLS: Record<'inventory' | 'b2b' | 'daily' | 'growth' | 'ads', string> = {
   inventory: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQVPsje-s9qGXGpNTxiYZhNa5laEtzl0FLnbhjF8DoP7xsnwWF7YfH2C0ysSQi_HNHvkcPCI8YdqX8G/pub?output=csv', // For Daily Ops & Inventory tabs
   b2b: 'YOUR_B2B_INVENTORY_SHEET_URL_HERE', // For B2B Inventory tab
   daily: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQXSEXlcVQfejFZ5SF7mBZbDXt-bnF9fBYbi8xfkQ_wOzFN6JeevfmFlhJhxOpTyAeNYbQeLKVr7pHv/pub?output=csv',    // For Daily P&L tab
   growth: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTVzF1bM5-_2rb-25uu4rHfDz-2wcp_O8FbDDr0JT4btPkRHJTMfj2_7ka2WVv8S255J_vdins3GhDv/pub?output=csv',      // For Growth tab
+  ads: 'YOUR_ADS_CONTROL_CENTER_SHEET_URL_HERE',      // For Ads Control Center tab
 };
 // ----------------------------------------------------
 
@@ -72,6 +85,14 @@ export default function MainView() {
   const [filteredData, setFilteredData] = useState<InventoryItem[]>([]);
   const [dailyData, setDailyData] = useState<ProcessedSheetData[] | null>(null);
   const [growthData, setGrowthData] = useState<GrowthData[] | null>(null);
+
+  // Ads Control Center State
+  const [campaigns, setCampaigns] = useState<Campaign[]>(initialCampaigns);
+  const [adGroups, setAdGroups] = useState<AdGroup[]>(initialAdGroups);
+  const [adsDailyMetrics, setAdsDailyMetrics] = useState<AdsDailyMetrics[]>(initialAdsDailyMetrics);
+  const [inventorySnapshots, setInventorySnapshots] = useState<InventorySnapshot[]>(initialInventorySnapshots);
+  const [decisionEngineOutputs, setDecisionEngineOutputs] = useState<DecisionEngineOutput[]>(initialDecisionEngineOutputs);
+
 
   // Filters & Thresholds
   const [currentChannel, setCurrentChannel] = useState<Channel>("All");
@@ -94,6 +115,11 @@ export default function MainView() {
     setB2bInventoryData([]);
     setDailyData(null);
     setGrowthData(growthMasterData);
+    setCampaigns(initialCampaigns);
+    setAdGroups(initialAdGroups);
+    setAdsDailyMetrics(initialAdsDailyMetrics);
+    setInventorySnapshots(initialInventorySnapshots);
+    setDecisionEngineOutputs(initialDecisionEngineOutputs);
   }, []);
 
   const handleReset = () => {
@@ -101,8 +127,6 @@ export default function MainView() {
     setSearchTerm("");
     setCurrentChannel("All");
     setRoasThreshold(1.5);
-    setDailyData(null);
-    setGrowthData(null);
     toast({ title: "View Reset", description: "All data has been reset to its initial state." });
   };
 
@@ -153,7 +177,7 @@ export default function MainView() {
   // === DATA PROCESSING & IMPORT ===
   const processSheetData = (
     data: ArrayBuffer,
-    type: 'inventory' | 'b2b' | 'daily' | 'growth'
+    type: 'inventory' | 'b2b' | 'daily' | 'growth' | 'ads'
   ) => {
     try {
       const workbook = XLSX.read(data, { type: "array" });
@@ -233,6 +257,100 @@ export default function MainView() {
             throw new Error("No valid B2B inventory data was parsed. Check column headers like 'SKU Name', 'Platform', 'Stock', etc.");
         }
         setB2bInventoryData(importedData);
+      } else if (type === 'ads') {
+        const headers: string[] = json[0].map((h:string) => h.toLowerCase().replace(/\s+/g, '_'));
+        const newAdGroups: AdGroup[] = [];
+        const newCampaigns: Campaign[] = [];
+        const newMetrics: AdsDailyMetrics[] = [];
+        const newInventory: InventorySnapshot[] = [];
+        const newDecisions: DecisionEngineOutput[] = [];
+
+        json.slice(1).forEach((row: any[], index: number) => {
+          const item: any = {};
+          headers.forEach((header, i) => {
+            item[header] = row[i];
+          });
+          
+          if(item.campaign_id && !newCampaigns.find(c => c.campaign_id === item.campaign_id)) {
+            newCampaigns.push({
+              campaign_id: item.campaign_id,
+              platform_id: item.platform_id,
+              account_id: item.account_id,
+              phase: item.phase,
+              objective: 'Conversions',
+              status: item.campaign_status || 'active',
+              daily_budget: 0,
+              auto_scale: true,
+              created_at: new Date().toISOString(),
+            });
+          }
+
+          if(item.ad_group_id && !newAdGroups.find(ag => ag.ad_group_id === item.ad_group_id)) {
+            newAdGroups.push({
+              ad_group_id: item.ad_group_id,
+              campaign_id: item.campaign_id,
+              sku_code: item.sku_code,
+              pack_size: 0,
+              status: item.ad_group_status || 'active',
+              bid_type: 'auto',
+              max_cpc: 0,
+            });
+          }
+
+          if(item.sku_code) {
+             newMetrics.push({
+                date: item.date,
+                platform_id: item.platform_id,
+                campaign_id: item.campaign_id,
+                ad_group_id: item.ad_group_id,
+                sku_code: item.sku_code,
+                impressions: parseInt(item.impressions, 10) || 0,
+                clicks: parseInt(item.clicks, 10) || 0,
+                orders: parseInt(item.orders, 10) || 0,
+                gmv: parseFloat(item.gmv) || 0,
+                ads_spent: parseFloat(item.ads_spent) || 0,
+                ctr: parseFloat(item.ctr) || 0,
+                cvr: parseFloat(item.cvr) || 0,
+                roas: parseFloat(item.roas) || 0,
+                tacos: parseFloat(item.tacos) || 0,
+            });
+
+             if(!newInventory.find(i => i.sku_code === item.sku_code)) {
+               newInventory.push({
+                  sku_code: item.sku_code,
+                  current_stock: parseInt(item.current_stock, 10) || 0,
+                  drr: parseInt(item.drr, 10) || 0,
+                  stock_cover_days: parseFloat(item.stock_cover_days) || 0,
+                  last_updated: new Date().toISOString(),
+               });
+             }
+
+             if(!newDecisions.find(d => d.ad_group_id === item.ad_group_id)) {
+                newDecisions.push({
+                  date: item.date,
+                  platform_id: item.platform_id,
+                  ad_group_id: item.ad_group_id,
+                  decision: item.decision,
+                  reason_codes: item.reason_codes ? item.reason_codes.split(',') : [],
+                  recommended_action: {
+                    new_daily_budget: 0,
+                    change_pct: 0
+                  }
+                });
+             }
+          }
+        });
+        
+        if (newAdGroups.length === 0) {
+            throw new Error("No valid ads data was parsed. Check column headers like 'ad_group_id', 'sku_code', etc.");
+        }
+
+        setCampaigns(newCampaigns);
+        setAdGroups(newAdGroups);
+        setAdsDailyMetrics(newMetrics);
+        setInventorySnapshots(newInventory);
+        setDecisionEngineOutputs(newDecisions);
+
       } else if (type === 'daily' || type === 'growth') {
             const header1: string[] = json[0] || [];
             const header2: string[] = json[1] || [];
@@ -368,7 +486,7 @@ export default function MainView() {
 
   const handleFileUpload = (
     event: React.ChangeEvent<HTMLInputElement>,
-    type: 'inventory' | 'b2b' | 'daily' | 'growth'
+    type: 'inventory' | 'b2b' | 'daily' | 'growth' | 'ads'
   ) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -385,7 +503,7 @@ export default function MainView() {
     if(event.target) event.target.value = '';
   };
   
-  const handleCloudSync = async (dataType: 'inventory' | 'b2b' | 'daily' | 'growth') => {
+  const handleCloudSync = async (dataType: 'inventory' | 'b2b' | 'daily' | 'growth' | 'ads') => {
     const url = GOOGLE_SHEET_URLS[dataType];
 
     if (!url || url.includes('YOUR_SHEET_URL_HERE')) {
@@ -416,6 +534,7 @@ export default function MainView() {
     await handleCloudSync('b2b');
     await handleCloudSync('daily');
     await handleCloudSync('growth');
+    await handleCloudSync('ads');
   };
   
   const handleDeleteSku = (id: number) => {
@@ -518,7 +637,15 @@ export default function MainView() {
                 />
             </TabsContent>
         <TabsContent value="ads">
-            <AdsControlCenterTab />
+            <AdsControlCenterTab
+                campaigns={campaigns}
+                adGroups={adGroups}
+                adsDailyMetrics={adsDailyMetrics}
+                inventorySnapshots={inventorySnapshots}
+                decisionEngineOutputs={decisionEngineOutputs}
+                onFileUpload={(e) => handleFileUpload(e, 'ads')}
+                onCloudImport={() => handleCloudSync('ads')}
+            />
         </TabsContent>
       </Tabs>
 
