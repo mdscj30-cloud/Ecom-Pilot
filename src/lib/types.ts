@@ -29,6 +29,18 @@ export interface InventoryItem {
   reviews: number;
 }
 
+export interface B2BInventoryItem {
+  id: number;
+  platform: 'Amazon' | 'Flipkart' | string;
+  sku_name: string;
+  asin: string;
+  listing_price: number;
+  b2b_price: number;
+  stock: number;
+  inbound_stock: number;
+}
+
+
 export interface Kpi {
   revenue: number;
   spend: number;
@@ -85,7 +97,7 @@ export interface MatrixData {
   };
 }
 
-export type TabId = 'daily' | 'inventory' | 'dailypnl' | 'recommendations' | 'growth';
+export type TabId = 'daily' | 'inventory' | 'b2b' | 'dailypnl' | 'recommendations' | 'growth';
 
 export type SortConfig = {
     column: string | null;

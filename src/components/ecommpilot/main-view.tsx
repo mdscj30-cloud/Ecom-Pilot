@@ -7,6 +7,7 @@ import {
   Activity,
   AlertTriangle,
   Box,
+  Building2,
   Calendar,
   CheckCircle,
   TrendingUp,
@@ -20,7 +21,8 @@ import type {
   Channel,
   ProcessedSheetData,
   Recommendation,
-  GrowthData
+  GrowthData,
+  B2BInventoryItem,
 } from "@/lib/types";
 import { masterData } from "@/lib/data";
 import { growthMasterData } from "@/lib/growth-data";
@@ -32,6 +34,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import Header from "./header";
 import DailyOpsTab from "./tabs/daily-ops-tab";
 import InventoryTab from "./tabs/inventory-tab";
+import B2BInventoryTab from "./tabs/b2b-inventory-tab";
 import PnlTab from "./tabs/pnl-tab";
 import RecommendationsTab from "./tabs/recommendations-tab";
 import GrowthTab from "./tabs/growth-tab";
@@ -40,14 +43,16 @@ import { AddSkuModal } from "./modals";
 const channelIcons = {
   daily: Activity,
   inventory: Box,
+  b2b: Building2,
   dailypnl: Calendar,
   growth: TrendingUp,
   recommendations: CheckCircle,
 };
 
 // --- IMPORTANT: Paste your Google Sheet URLs here ---
-const GOOGLE_SHEET_URLS: Record<'inventory' | 'daily' | 'growth', string> = {
+const GOOGLE_SHEET_URLS: Record<'inventory' | 'b2b' | 'daily' | 'growth', string> = {
   inventory: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQVPsje-s9qGXGpNTxiYZhNa5laEtzl0FLnbhjF8DoP7xsnwWF7YfH2C0ysSQi_HNHvkcPCI8YdqX8G/pub?output=csv', // For Daily Ops & Inventory tabs
+  b2b: 'YOUR_B2B_INVENTORY_SHEET_URL_HERE', // For B2B Inventory tab
   daily: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQXSEXlcVQfejFZ5SF7mBZbDXt-bnF9fBYbi8xfkQ_wOzFN6JeevfmFlhJhxOpTyAeNYbQeLKVr7pHv/pub?output=csv',    // For Daily P&L tab
   growth: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTVzF1bM5-_2rb-25uu4rHfDz-2wcp_O8FbDDr0JT4btPkRHJTMfj2_7ka2WVv8S255J_vdins3GhDv/pub?output=csv',      // For Growth tab
 };
@@ -60,6 +65,7 @@ export default function MainView() {
   // === STATE MANAGEMENT ===
   const [activeTab, setActiveTab] = useState<TabId>("daily");
   const [displayData, setDisplayData] = useState<InventoryItem[]>([]);
+  const [b2bInventoryData, setB2bInventoryData] = useState<B2BInventoryItem[]>([]);
   const [filteredData, setFilteredData] = useState<InventoryItem[]>([]);
   const [dailyData, setDailyData] = useState<ProcessedSheetData[] | null>(null);
   const [growthData, setGrowthData] = useState<GrowthData[] | null>(null);
@@ -82,6 +88,7 @@ export default function MainView() {
   // === DATA INITIALIZATION & RESET ===
   const initializeData = useCallback(() => {
     setDisplayData(masterData);
+    setB2bInventoryData([]);
     setDailyData(null);
     setGrowthData(growthMasterData);
   }, []);
@@ -143,7 +150,7 @@ export default function MainView() {
   // === DATA PROCESSING & IMPORT ===
   const processSheetData = (
     data: ArrayBuffer,
-    type: 'inventory' | 'daily' | 'growth'
+    type: 'inventory' | 'b2b' | 'daily' | 'growth'
   ) => {
     try {
       const workbook = XLSX.read(data, { type: "array" });
@@ -199,6 +206,29 @@ export default function MainView() {
              throw new Error("No valid inventory data was parsed. Check column headers like 'SKU Name', 'Price', 'Kol Stock', etc.");
           }
           setDisplayData(importedData);
+      } else if (type === 'b2b') {
+        const headers: string[] = json[0].map((h:string) => h.toLowerCase().replace(/\s+/g, '_'));
+        const importedData: B2BInventoryItem[] = json.slice(1).map((row: any[], index: number) => {
+            const item: any = {};
+            headers.forEach((header, i) => {
+              item[header] = row[i];
+            });
+
+            return {
+              id: Date.now() + index,
+              platform: item.platform || 'Amazon',
+              sku_name: item.sku_name,
+              asin: item.asin,
+              listing_price: parseFloat(item.listing_price) || 0,
+              b2b_price: parseFloat(item.b2b_price) || 0,
+              stock: parseInt(item.stock, 10) || 0,
+              inbound_stock: parseInt(item.inbound_stock, 10) || 0,
+            };
+        });
+        if (importedData.length === 0 || !importedData.some(d => d.sku_name)) {
+            throw new Error("No valid B2B inventory data was parsed. Check column headers like 'SKU Name', 'Platform', 'Stock', etc.");
+        }
+        setB2bInventoryData(importedData);
       } else if (type === 'daily' || type === 'growth') {
             const header1: string[] = json[0] || [];
             const header2: string[] = json[1] || [];
@@ -334,7 +364,7 @@ export default function MainView() {
 
   const handleFileUpload = (
     event: React.ChangeEvent<HTMLInputElement>,
-    type: 'inventory' | 'daily' | 'growth'
+    type: 'inventory' | 'b2b' | 'daily' | 'growth'
   ) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -351,7 +381,7 @@ export default function MainView() {
     if(event.target) event.target.value = '';
   };
   
-  const handleCloudSync = async (dataType: 'inventory' | 'daily' | 'growth') => {
+  const handleCloudSync = async (dataType: 'inventory' | 'b2b' | 'daily' | 'growth') => {
     const url = GOOGLE_SHEET_URLS[dataType];
 
     if (!url || url.includes('YOUR_SHEET_URL_HERE')) {
@@ -379,6 +409,7 @@ export default function MainView() {
 
   const handleSyncAll = async () => {
     await handleCloudSync('inventory');
+    await handleCloudSync('b2b');
     await handleCloudSync('daily');
     await handleCloudSync('growth');
   };
@@ -417,7 +448,7 @@ export default function MainView() {
             return (
               <TabsTrigger key={tab} value={tab} className="capitalize text-xs sm:text-sm">
                 <Icon className="w-4 h-4 mr-1.5" />
-                {tab === 'daily' ? 'Daily Ops' : tab === 'dailypnl' ? 'Daily P&L' : tab === 'recommendations' ? 'Action Center' : tab}
+                {tab === 'daily' ? 'Daily Ops' : tab === 'dailypnl' ? 'Daily P&L' : tab === 'recommendations' ? 'Action Center' : tab === 'b2b' ? 'B2B Inventory' : tab}
               </TabsTrigger>
             )
           })}
@@ -450,7 +481,16 @@ export default function MainView() {
                 setSortConfig={setSortConfig}
               />
             </TabsContent>
-
+        <TabsContent value="b2b">
+              <B2BInventoryTab 
+                data={b2bInventoryData}
+                searchTerm={searchTerm}
+                onFileUpload={(e) => handleFileUpload(e, 'b2b')}
+                onCloudImport={() => handleCloudSync('b2b')}
+                sortConfig={sortConfig}
+                setSortConfig={setSortConfig}
+              />
+        </TabsContent>
         <TabsContent value="dailypnl">
                 <PnlTab 
                     data={dailyData}
