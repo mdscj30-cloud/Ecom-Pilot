@@ -37,7 +37,7 @@ export interface B2BInventoryItem {
   listing_price: number;
   b2b_price: number;
   stock: number;
-  inbound_stock: number;
+  warehouse_stock: number;
   drr: number;
 }
 
@@ -65,7 +65,7 @@ export interface ProcessedSheetData {
   units: number;
   packets: number;
   adsSpent: number;
-  avgAsp: number;
+avgAsp: number;
   tacos: number;
   month: string;
   year: string;

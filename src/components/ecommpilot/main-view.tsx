@@ -222,7 +222,7 @@ export default function MainView() {
               listing_price: parseFloat(item.listing_price) || 0,
               b2b_price: parseFloat(item.b2b_price) || 0,
               stock: parseInt(item.stock, 10) || 0,
-              inbound_stock: parseInt(item.inbound_stock, 10) || 0,
+              warehouse_stock: parseInt(item.warehouse_stock, 10) || 0,
               drr: parseInt(item.drr, 10) || 0,
             };
         });

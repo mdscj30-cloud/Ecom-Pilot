@@ -39,12 +39,12 @@ export default function B2BInventoryTab({ data, searchTerm, onFileUpload, onClou
   const kpis = useMemo(() => {
     return filteredData.reduce(
       (acc, item) => {
-        acc.totalStock += item.stock;
+        acc.fulfillmentStock += item.stock;
         acc.totalValue += item.stock * item.b2b_price;
-        acc.inboundStock += item.inbound_stock;
+        acc.warehouseStock += item.warehouse_stock;
         return acc;
       },
-      { totalStock: 0, totalValue: 0, inboundStock: 0, skuCount: filteredData.length }
+      { fulfillmentStock: 0, totalValue: 0, warehouseStock: 0, skuCount: filteredData.length }
     );
   }, [filteredData]);
 
@@ -101,9 +101,9 @@ export default function B2BInventoryTab({ data, searchTerm, onFileUpload, onClou
     <div className="space-y-6">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard title="Total B2B SKUs" value={kpis.skuCount} />
-        <KpiCard title="Total Stock (Units)" value={kpis.totalStock.toLocaleString()} />
+        <KpiCard title="Fulfillment Stock" value={kpis.fulfillmentStock.toLocaleString()} />
+        <KpiCard title="Warehouse Stock" value={kpis.warehouseStock.toLocaleString()} className="text-blue-500" />
         <KpiCard title="Total Inventory Value" value={`₹${(kpis.totalValue / 100000).toFixed(2)} L`} className="text-green-600" />
-        <KpiCard title="Inbound Stock (Units)" value={kpis.inboundStock.toLocaleString()} className="text-blue-500" />
       </div>
 
       <Card>
@@ -149,8 +149,8 @@ export default function B2BInventoryTab({ data, searchTerm, onFileUpload, onClou
                             <TableHead className="cursor-pointer" onClick={() => requestSort('asin')}>ASIN / FSN {getSortIcon('asin')}</TableHead>
                             <TableHead className="text-right cursor-pointer" onClick={() => requestSort('listing_price')}>Listing Price {getSortIcon('listing_price')}</TableHead>
                             <TableHead className="text-right cursor-pointer" onClick={() => requestSort('b2b_price')}>B2B Price {getSortIcon('b2b_price')}</TableHead>
+                            <TableHead className="text-right cursor-pointer bg-blue-500/10" onClick={() => requestSort('warehouse_stock')}>Warehouse {getSortIcon('warehouse_stock')}</TableHead>
                             <TableHead className="text-right cursor-pointer bg-primary/10" onClick={() => requestSort('stock')}>Stock {getSortIcon('stock')}</TableHead>
-                            <TableHead className="text-right cursor-pointer" onClick={() => requestSort('inbound_stock')}>Inbound {getSortIcon('inbound_stock')}</TableHead>
                             <TableHead className="text-right cursor-pointer" onClick={() => requestSort('drr')}>DRR {getSortIcon('drr')}</TableHead>
                             <TableHead className="text-right cursor-pointer" onClick={() => requestSort('doc')}>DOC {getSortIcon('doc')}</TableHead>
                             <TableHead className="text-center">Action</TableHead>
@@ -166,8 +166,8 @@ export default function B2BInventoryTab({ data, searchTerm, onFileUpload, onClou
                                     <TableCell className="font-mono">{item.asin}</TableCell>
                                     <TableCell className="text-right font-mono">₹{item.listing_price.toFixed(2)}</TableCell>
                                     <TableCell className="text-right font-mono text-primary font-bold">₹{item.b2b_price.toFixed(2)}</TableCell>
+                                    <TableCell className="text-right text-blue-500 font-bold bg-blue-500/10">{item.warehouse_stock > 0 ? item.warehouse_stock.toLocaleString() : '-'}</TableCell>
                                     <TableCell className="text-right font-bold bg-primary/10">{item.stock.toLocaleString()}</TableCell>
-                                    <TableCell className="text-right text-blue-500 font-bold">{item.inbound_stock > 0 ? item.inbound_stock.toLocaleString() : '-'}</TableCell>
                                     <TableCell className="text-right">{item.drr}</TableCell>
                                     <TableCell 
                                         className={cn("text-right font-bold", 
