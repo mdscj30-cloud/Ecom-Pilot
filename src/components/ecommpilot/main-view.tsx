@@ -10,6 +10,7 @@ import {
   Building2,
   Calendar,
   CheckCircle,
+  RadioTower,
   TrendingUp,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -38,6 +39,7 @@ import B2BInventoryTab from "./tabs/b2b-inventory-tab";
 import PnlTab from "./tabs/pnl-tab";
 import RecommendationsTab from "./tabs/recommendations-tab";
 import GrowthTab from "./tabs/growth-tab";
+import AdsControlCenterTab from "./tabs/ads-control-center-tab";
 import { AddSkuModal } from "./modals";
 
 const channelIcons = {
@@ -47,6 +49,7 @@ const channelIcons = {
   dailypnl: Calendar,
   growth: TrendingUp,
   recommendations: CheckCircle,
+  ads: RadioTower,
 };
 
 // --- IMPORTANT: Paste your Google Sheet URLs here ---
@@ -174,8 +177,8 @@ export default function MainView() {
             return {
               id: Date.now() + index,
               channel: item.channel || 'Amazon',
-              name: item.sku_name,
               type: 'B2C', 
+              name: item.sku_name,
               price: parseFloat(item.price) || 0,
               cost: parseFloat(item.cost) || 0,
               shipping: parseFloat(item.shipping) || 0,
@@ -449,7 +452,7 @@ export default function MainView() {
             return (
               <TabsTrigger key={tab} value={tab} className="capitalize text-xs sm:text-sm">
                 <Icon className="w-4 h-4 mr-1.5" />
-                {tab === 'daily' ? 'Daily Ops' : tab === 'dailypnl' ? 'Daily P&L' : tab === 'recommendations' ? 'Action Center' : tab === 'b2b' ? 'B2B Inventory' : tab}
+                {tab === 'daily' ? 'Daily Ops' : tab === 'dailypnl' ? 'Daily P&L' : tab === 'recommendations' ? 'Action Center' : tab === 'b2b' ? 'B2B Inventory' : tab === 'ads' ? 'Ads Control' : tab}
               </TabsTrigger>
             )
           })}
@@ -514,6 +517,9 @@ export default function MainView() {
                   setSortConfig={setSortConfig}
                 />
             </TabsContent>
+        <TabsContent value="ads">
+            <AdsControlCenterTab />
+        </TabsContent>
       </Tabs>
 
       <AddSkuModal

@@ -101,7 +101,7 @@ export interface MatrixData {
   };
 }
 
-export type TabId = 'daily' | 'inventory' | 'b2b' | 'dailypnl' | 'recommendations' | 'growth';
+export type TabId = 'daily' | 'inventory' | 'b2b' | 'dailypnl' | 'recommendations' | 'growth' | 'ads';
 
 export type InventorySortColumn = 
   | 'name'
@@ -139,4 +139,117 @@ export interface GrowthData {
     tacos: number;
     mom: number;
     channelShare: number;
+}
+
+// --- Ads Control Center Types ---
+
+export interface Platform {
+  platform_id: string;
+  platform_name: string;
+  currency: string;
+  timezone: string;
+  status: 'active' | 'inactive';
+  ads_supported: boolean;
+}
+
+export interface ChannelAccount {
+  account_id: string;
+  platform_id: string;
+  account_name: string;
+  daily_budget_limit: number;
+  monthly_budget_limit: number;
+  status: 'active' | 'inactive';
+}
+
+export interface Campaign {
+  campaign_id: string;
+  platform_id: string;
+  account_id: string;
+  phase: string;
+  objective: string;
+  status: 'active' | 'paused' | 'ended';
+  daily_budget: number;
+  auto_scale: boolean;
+  created_at: string;
+}
+
+export interface AdGroup {
+  ad_group_id: string;
+  campaign_id: string;
+  sku_code: string;
+  pack_size: number;
+  status: 'active' | 'paused';
+  bid_type: 'auto' | 'manual';
+  max_cpc: number;
+}
+
+export interface AdsDailyMetrics {
+  date: string;
+  platform_id: string;
+  campaign_id: string;
+  ad_group_id: string;
+  sku_code: string;
+  impressions: number;
+  clicks: number;
+  orders: number;
+  gmv: number;
+  ads_spent: number;
+  ctr: number;
+  cvr: number;
+  roas: number;
+  tacos: number;
+}
+
+export interface InventorySnapshot {
+  sku_code: string;
+  current_stock: number;
+  drr: number;
+  stock_cover_days: number;
+  last_updated: string;
+}
+
+export interface ControlThresholds {
+  id: string; // e.g., meesho_phase_3
+  platform_id: string;
+  phase: string;
+  min_roas: number;
+  target_roas: number;
+  max_tacos: number;
+  min_stock_cover: number;
+  pause_stock_cover: number;
+  scale_budget_pct: number;
+  cut_budget_pct: number;
+}
+
+export interface DecisionEngineOutput {
+  date: string;
+  platform_id: string;
+  ad_group_id: string;
+  decision: 'SCALE' | 'MAINTAIN' | 'CUT' | 'PAUSE';
+  reason_codes: string[];
+  recommended_action: {
+    new_daily_budget: number;
+    change_pct: number;
+  };
+}
+
+export interface AdAlert {
+  alert_id: string;
+  severity: 'HIGH' | 'MEDIUM' | 'LOW';
+  type: 'AUTO_PAUSE' | 'BUDGET_CAP' | 'PERFORMANCE_DROP';
+  platform_id: string;
+  sku_code: string;
+  message: string;
+  timestamp: string;
+}
+
+export interface ActionLog {
+  action_id: string;
+  entity: 'ad_group' | 'campaign';
+  entity_id: string;
+  action: 'BUDGET_INCREASE' | 'BUDGET_DECREASE' | 'STATUS_PAUSE' | 'STATUS_ACTIVE';
+  old_value: number | string;
+  new_value: number | string;
+  triggered_by: 'AUTO_ENGINE' | 'MANUAL_OVERRIDE';
+  timestamp: string;
 }
