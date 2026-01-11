@@ -235,101 +235,99 @@ export default function InventoryTab({ data, searchTerm, onFileUpload, onCloudIm
             <Button size="sm" variant="outline"><Link className="w-3 h-3 mr-1" /> Link</Button>
         </div>
       </div>
+      
+      <Card>
+          <CardHeader><CardTitle className="text-sm font-bold text-primary">Daily Inventory SOP</CardTitle></CardHeader>
+          <CardContent>
+              <ul className="space-y-3 text-xs text-muted-foreground">
+                  <li className="flex items-start gap-2"><span className="text-primary mt-1">1.</span> Identify <b className="text-destructive">Critical</b> SKUs (&lt; 8 days cover). Pause Ads if active.</li>
+                  <li className="flex items-start gap-2"><span className="text-primary mt-1">2.</span> Review <b className="text-amber-600">Overstocked</b> SKUs (&gt; 40 days). Plan promotions or reduce reorders.</li>
+                  <li className="flex items-start gap-2"><span className="text-primary mt-1">3.</span> Check for <b className="text-green-600">Healthy</b> SKUs (8-40 days) to ensure stable sales.</li>
+                  <li className="flex items-start gap-2"><span className="text-primary mt-1">4.</span> Monitor <b className="text-slate-500">Slow Moving</b> items (low DRR) for potential liquidation.</li>
+                  <li className="flex items-start gap-2"><span className="text-primary mt-1">5.</span> Raise PO if <b>Days to Reorder ≤ 3</b>.</li>
+              </ul>
+          </CardContent>
+      </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        <Card className="col-span-1 h-fit">
-            <CardHeader><CardTitle className="text-sm font-bold text-primary">Daily Inventory SOP</CardTitle></CardHeader>
-            <CardContent>
-                <ul className="space-y-3 text-xs text-muted-foreground">
-                    <li className="flex items-start gap-2"><span className="text-primary mt-1">1.</span> Identify <b className="text-destructive">Critical</b> SKUs (&lt; 8 days cover). Pause Ads if active.</li>
-                    <li className="flex items-start gap-2"><span className="text-primary mt-1">2.</span> Review <b className="text-amber-600">Overstocked</b> SKUs (&gt; 40 days). Plan promotions or reduce reorders.</li>
-                    <li className="flex items-start gap-2"><span className="text-primary mt-1">3.</span> Check for <b className="text-green-600">Healthy</b> SKUs (8-40 days) to ensure stable sales.</li>
-                    <li className="flex items-start gap-2"><span className="text-primary mt-1">4.</span> Monitor <b className="text-slate-500">Slow Moving</b> items (low DRR) for potential liquidation.</li>
-                    <li className="flex items-start gap-2"><span className="text-primary mt-1">5.</span> Raise PO if <b>Days to Reorder ≤ 3</b>.</li>
-                </ul>
-            </CardContent>
-        </Card>
-        
-        <div className="lg:col-span-3 bg-card rounded-xl border shadow-md overflow-hidden">
-            <div className="overflow-x-auto custom-scrollbar">
-                <Table>
-                    <TableHeader className="text-[10px] uppercase tracking-wide bg-muted/50">
-                        <TableRow>
-                            <TableHead className="p-3 sticky-col bg-card border-r min-w-[150px] z-20 cursor-pointer" onClick={() => requestSort('name')}>SKU Name {getSortIcon('name')}</TableHead>
-                            <TableHead className="text-center cursor-pointer" onClick={() => requestSort('cost')}>Cost {getSortIcon('cost')}</TableHead>
-                            <TableHead colSpan={2} className="text-center bg-blue-500/10">Kol</TableHead>
-                            <TableHead colSpan={2} className="text-center bg-purple-500/10">Pith</TableHead>
-                            <TableHead colSpan={2} className="text-center bg-orange-500/10">Har</TableHead>
-                            <TableHead colSpan={2} className="text-center bg-cyan-500/10">Blr</TableHead>
-                            <TableHead className="text-center bg-muted cursor-pointer" onClick={() => requestSort('cover')}>Cover {getSortIcon('cover')}</TableHead>
-                            <TableHead className="text-center bg-muted">Trend</TableHead>
-                            <TableHead className="text-center bg-muted cursor-pointer" onClick={() => requestSort('rop')}>ROP {getSortIcon('rop')}</TableHead>
-                            <TableHead className="text-center bg-muted cursor-pointer" onClick={() => requestSort('reorderIn')}>Reorder In {getSortIcon('reorderIn')}</TableHead>
-                            <TableHead className="text-center bg-muted border-r">Status</TableHead>
-                            <TableHead className="text-center bg-yellow-500/10 cursor-pointer" onClick={() => requestSort('planReq')}>Plan Req {getSortIcon('planReq')}</TableHead>
-                        </TableRow>
-                        <TableRow className="text-[9px] bg-muted/50">
-                            <TableHead className="sticky-col bg-card border-r z-20"></TableHead>
-                            <TableHead className="text-center">(₹)</TableHead>
-                            <TableHead className="text-center cursor-pointer" onClick={() => requestSort('stock_kol')}>Stock {getSortIcon('stock_kol')}</TableHead>
-                            <TableHead className="text-center border-r loc-group-border cursor-pointer" onClick={() => requestSort('drr_kol')}>DRR {getSortIcon('drr_kol')}</TableHead>
-                            <TableHead className="text-center cursor-pointer" onClick={() => requestSort('stock_pith')}>Stock {getSortIcon('stock_pith')}</TableHead>
-                            <TableHead className="text-center border-r loc-group-border cursor-pointer" onClick={() => requestSort('drr_pith')}>DRR {getSortIcon('drr_pith')}</TableHead>
-                            <TableHead className="text-center cursor-pointer" onClick={() => requestSort('stock_har')}>Stock {getSortIcon('stock_har')}</TableHead>
-                            <TableHead className="text-center border-r loc-group-border cursor-pointer" onClick={() => requestSort('drr_har')}>DRR {getSortIcon('drr_har')}</TableHead>
-                            <TableHead className="text-center cursor-pointer" onClick={() => requestSort('stock_blr')}>Stock {getSortIcon('stock_blr')}</TableHead>
-                            <TableHead className="text-center border-r loc-group-border cursor-pointer" onClick={() => requestSort('drr_blr')}>DRR {getSortIcon('drr_blr')}</TableHead>
-                            <TableHead className="text-center">(Days)</TableHead>
-                            <TableHead className="text-center">(30d)</TableHead>
-                            <TableHead className="text-center">(Units)</TableHead>
-                            <TableHead className="text-center">(Days)</TableHead>
-                            <TableHead className="text-center border-r">Risk</TableHead>
-                            <TableHead className="text-center">Req</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody className="text-xs">
-                        {sortedData.map(item => {
-                            const totalLocStock = (item.stock_kol || 0) + (item.stock_pith || 0) + (item.stock_har || 0) + (item.stock_blr || 0);
-                            const globalCover = item.drr > 0 ? totalLocStock / item.drr : 999;
-                            const rop = Math.ceil(item.drr * 10); // Reorder point at 10 days of stock
-                            const daysToRop = item.drr > 0 ? Math.round((totalLocStock - rop) / item.drr) : 99;
-                            const totalDeficit = ["kol", "pith", "har", "blr"].reduce((sum, loc) => sum + Math.max(0, ((item[`drr_${loc}` as keyof InventoryItem] as number) || 0) * 15 - ((item[`stock_${loc}` as keyof InventoryItem] as number) || 0)), 0);
-                            
-                            const getStatus = () => {
-                                if (item.drr === 0 && totalLocStock > 0) return <span className="text-slate-500 font-bold">Slow Moving</span>;
-                                if (globalCover < 8) return <span className="text-destructive font-bold animate-pulse">Critical</span>;
-                                if (globalCover > 40) return <span className="text-amber-600 font-bold">Overstocked</span>;
-                                return <span className="text-green-600 font-bold">Healthy</span>;
-                            };
+      <div className="bg-card rounded-xl border shadow-md overflow-hidden">
+          <div className="overflow-x-auto custom-scrollbar">
+              <Table>
+                  <TableHeader className="text-[10px] uppercase tracking-wide bg-muted/50">
+                      <TableRow>
+                          <TableHead className="p-3 sticky-col bg-card border-r min-w-[150px] z-20 cursor-pointer" onClick={() => requestSort('name')}>SKU Name {getSortIcon('name')}</TableHead>
+                          <TableHead className="text-center cursor-pointer" onClick={() => requestSort('cost')}>Cost {getSortIcon('cost')}</TableHead>
+                          <TableHead colSpan={2} className="text-center bg-blue-500/10">Kol</TableHead>
+                          <TableHead colSpan={2} className="text-center bg-purple-500/10">Pith</TableHead>
+                          <TableHead colSpan={2} className="text-center bg-orange-500/10">Har</TableHead>
+                          <TableHead colSpan={2} className="text-center bg-cyan-500/10">Blr</TableHead>
+                          <TableHead className="text-center bg-muted cursor-pointer" onClick={() => requestSort('cover')}>Cover {getSortIcon('cover')}</TableHead>
+                          <TableHead className="text-center bg-muted">Trend</TableHead>
+                          <TableHead className="text-center bg-muted cursor-pointer" onClick={() => requestSort('rop')}>ROP {getSortIcon('rop')}</TableHead>
+                          <TableHead className="text-center bg-muted cursor-pointer" onClick={() => requestSort('reorderIn')}>Reorder In {getSortIcon('reorderIn')}</TableHead>
+                          <TableHead className="text-center bg-muted border-r">Status</TableHead>
+                          <TableHead className="text-center bg-yellow-500/10 cursor-pointer" onClick={() => requestSort('planReq')}>Plan Req {getSortIcon('planReq')}</TableHead>
+                      </TableRow>
+                      <TableRow className="text-[9px] bg-muted/50">
+                          <TableHead className="sticky-col bg-card border-r z-20"></TableHead>
+                          <TableHead className="text-center">(₹)</TableHead>
+                          <TableHead className="text-center cursor-pointer" onClick={() => requestSort('stock_kol')}>Stock {getSortIcon('stock_kol')}</TableHead>
+                          <TableHead className="text-center border-r loc-group-border cursor-pointer" onClick={() => requestSort('drr_kol')}>DRR {getSortIcon('drr_kol')}</TableHead>
+                          <TableHead className="text-center cursor-pointer" onClick={() => requestSort('stock_pith')}>Stock {getSortIcon('stock_pith')}</TableHead>
+                          <TableHead className="text-center border-r loc-group-border cursor-pointer" onClick={() => requestSort('drr_pith')}>DRR {getSortIcon('drr_pith')}</TableHead>
+                          <TableHead className="text-center cursor-pointer" onClick={() => requestSort('stock_har')}>Stock {getSortIcon('stock_har')}</TableHead>
+                          <TableHead className="text-center border-r loc-group-border cursor-pointer" onClick={() => requestSort('drr_har')}>DRR {getSortIcon('drr_har')}</TableHead>
+                          <TableHead className="text-center cursor-pointer" onClick={() => requestSort('stock_blr')}>Stock {getSortIcon('stock_blr')}</TableHead>
+                          <TableHead className="text-center border-r loc-group-border cursor-pointer" onClick={() => requestSort('drr_blr')}>DRR {getSortIcon('drr_blr')}</TableHead>
+                          <TableHead className="text-center">(Days)</TableHead>
+                          <TableHead className="text-center">(30d)</TableHead>
+                          <TableHead className="text-center">(Units)</TableHead>
+                          <TableHead className="text-center">(Days)</TableHead>
+                          <TableHead className="text-center border-r">Risk</TableHead>
+                          <TableHead className="text-center">Req</TableHead>
+                      </TableRow>
+                  </TableHeader>
+                  <TableBody className="text-xs">
+                      {sortedData.map(item => {
+                          const totalLocStock = (item.stock_kol || 0) + (item.stock_pith || 0) + (item.stock_har || 0) + (item.stock_blr || 0);
+                          const globalCover = item.drr > 0 ? totalLocStock / item.drr : 999;
+                          const rop = Math.ceil(item.drr * 10); // Reorder point at 10 days of stock
+                          const daysToRop = item.drr > 0 ? Math.round((totalLocStock - rop) / item.drr) : 99;
+                          const totalDeficit = ["kol", "pith", "har", "blr"].reduce((sum, loc) => sum + Math.max(0, ((item[`drr_${loc}` as keyof InventoryItem] as number) || 0) * 15 - ((item[`stock_${loc}` as keyof InventoryItem] as number) || 0)), 0);
+                          
+                          const getStatus = () => {
+                              if (item.drr === 0 && totalLocStock > 0) return <span className="text-slate-500 font-bold">Slow Moving</span>;
+                              if (globalCover < 8) return <span className="text-destructive font-bold animate-pulse">Critical</span>;
+                              if (globalCover > 40) return <span className="text-amber-600 font-bold">Overstocked</span>;
+                              return <span className="text-green-600 font-bold">Healthy</span>;
+                          };
 
-                            return (
-                                <TableRow key={item.id}>
-                                    <TableCell className="sticky-col bg-card border-r font-medium text-foreground">{item.name}</TableCell>
-                                    <TableCell className="text-center font-mono">₹{item.cost.toFixed(0)}</TableCell>
-                                    <TableCell className="text-center">{renderCell(item.stock_kol || 0, item.drr_kol || 0, item.cost, viewMode)}</TableCell><TableCell className="text-center border-r loc-group-border text-muted-foreground">{item.drr_kol || 0}</TableCell>
-                                    <TableCell className="text-center">{renderCell(item.stock_pith || 0, item.drr_pith || 0, item.cost, viewMode)}</TableCell><TableCell className="text-center border-r loc-group-border text-muted-foreground">{item.drr_pith || 0}</TableCell>
-                                    <TableCell className="text-center">{renderCell(item.stock_har || 0, item.drr_har || 0, item.cost, viewMode)}</TableCell><TableCell className="text-center border-r loc-group-border text-muted-foreground">{item.drr_har || 0}</TableCell>
-                                    <TableCell className="text-center">{renderCell(item.stock_blr || 0, item.drr_blr || 0, item.cost, viewMode)}</TableCell><TableCell className="text-center border-r loc-group-border text-muted-foreground">{item.drr_blr || 0}</TableCell>
-                                    <TableCell className={cn("text-center font-bold text-foreground", globalCover < 8 ? 'text-destructive' : globalCover > 40 ? 'text-amber-600' : 'text-green-600')}>{isFinite(globalCover) ? `${Math.round(globalCover)}d` : '∞'}</TableCell>
-                                    <TableCell className="text-center text-lg">{item.id % 2 === 0 ? <ArrowUp className="w-4 h-4 mx-auto text-green-500" /> : <ArrowDown className="w-4 h-4 mx-auto text-red-400" />}</TableCell>
-                                    <TableCell className="text-center text-muted-foreground">{rop}</TableCell>
-                                    <TableCell className={`text-center font-bold ${daysToRop < 3 ? 'text-destructive' : ''}`}>{daysToRop < 0 ? 0 : daysToRop}d</TableCell>
-                                    <TableCell className="text-center text-[10px] border-r">
-                                        {getStatus()}
-                                    </TableCell>
-                                    <TableCell className="text-center bg-yellow-500/10">
-                                        <div className="flex flex-col text-[10px]">
-                                            <span className="font-bold text-destructive">{totalDeficit > 0 ? totalDeficit : '-'}</span>
-                                            <span className="text-muted-foreground">₹{Math.round(totalDeficit*item.cost/1000)}k</span>
-                                        </div>
-                                    </TableCell>
-                                </TableRow>
-                            )
-                        })}
-                    </TableBody>
-                </Table>
-            </div>
-        </div>
+                          return (
+                              <TableRow key={item.id}>
+                                  <TableCell className="sticky-col bg-card border-r font-medium text-foreground">{item.name}</TableCell>
+                                  <TableCell className="text-center font-mono">₹{item.cost.toFixed(0)}</TableCell>
+                                  <TableCell className="text-center">{renderCell(item.stock_kol || 0, item.drr_kol || 0, item.cost, viewMode)}</TableCell><TableCell className="text-center border-r loc-group-border text-muted-foreground">{item.drr_kol || 0}</TableCell>
+                                  <TableCell className="text-center">{renderCell(item.stock_pith || 0, item.drr_pith || 0, item.cost, viewMode)}</TableCell><TableCell className="text-center border-r loc-group-border text-muted-foreground">{item.drr_pith || 0}</TableCell>
+                                  <TableCell className="text-center">{renderCell(item.stock_har || 0, item.drr_har || 0, item.cost, viewMode)}</TableCell><TableCell className="text-center border-r loc-group-border text-muted-foreground">{item.drr_har || 0}</TableCell>
+                                  <TableCell className="text-center">{renderCell(item.stock_blr || 0, item.drr_blr || 0, item.cost, viewMode)}</TableCell><TableCell className="text-center border-r loc-group-border text-muted-foreground">{item.drr_blr || 0}</TableCell>
+                                  <TableCell className={cn("text-center font-bold text-foreground", globalCover < 8 ? 'text-destructive' : globalCover > 40 ? 'text-amber-600' : 'text-green-600')}>{isFinite(globalCover) ? `${Math.round(globalCover)}d` : '∞'}</TableCell>
+                                  <TableCell className="text-center text-lg">{item.id % 2 === 0 ? <ArrowUp className="w-4 h-4 mx-auto text-green-500" /> : <ArrowDown className="w-4 h-4 mx-auto text-red-400" />}</TableCell>
+                                  <TableCell className="text-center text-muted-foreground">{rop}</TableCell>
+                                  <TableCell className={`text-center font-bold ${daysToRop < 3 ? 'text-destructive' : ''}`}>{daysToRop < 0 ? 0 : daysToRop}d</TableCell>
+                                  <TableCell className="text-center text-[10px] border-r">
+                                      {getStatus()}
+                                  </TableCell>
+                                  <TableCell className="text-center bg-yellow-500/10">
+                                      <div className="flex flex-col text-[10px]">
+                                          <span className="font-bold text-destructive">{totalDeficit > 0 ? totalDeficit : '-'}</span>
+                                          <span className="text-muted-foreground">₹{Math.round(totalDeficit*item.cost/1000)}k</span>
+                                      </div>
+                                  </TableCell>
+                              </TableRow>
+                          )
+                      })}
+                  </TableBody>
+              </Table>
+          </div>
       </div>
     </div>
   );
