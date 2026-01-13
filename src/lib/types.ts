@@ -52,7 +52,7 @@ export interface Kpi {
 export interface InventoryKpi {
   sellableValue: number;
   capitalNeeded: number;
-
+  totalCostValue: number;
   avgCover: number;
   stockouts: number;
   stuckCapital: number;

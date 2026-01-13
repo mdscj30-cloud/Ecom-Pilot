@@ -56,6 +56,7 @@ export default function InventoryTab({ data, searchTerm, onFileUpload, onCloudIm
         const globalCover = item.drr > 0 ? totalLocStock / item.drr : 999;
         
         acc.sellableValue += totalLocStock * item.price;
+        acc.totalCostValue += totalLocStock * item.cost;
         
         if (globalCover > 40 && item.drr > 0) { // Overstocked logic for Stuck Capital
             const excessStock = (globalCover - 40) * item.drr;
@@ -78,7 +79,7 @@ export default function InventoryTab({ data, searchTerm, onFileUpload, onCloudIm
 
         return acc;
       },
-      { sellableValue: 0, capitalNeeded: 0, avgCover: 0, stockouts: 0, stuckCapital: 0 }
+      { sellableValue: 0, capitalNeeded: 0, totalCostValue: 0, avgCover: 0, stockouts: 0, stuckCapital: 0 }
     );
 
     result.avgCover = totalDrr > 0 ? totalStock / totalDrr : 0;
@@ -182,8 +183,9 @@ export default function InventoryTab({ data, searchTerm, onFileUpload, onCloudIm
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
         <KpiCard title="Sellable Value" value={`₹${(kpis.sellableValue/100000).toFixed(2)} L`} className="text-green-600" />
+        <KpiCard title="Total Cost Value" value={`₹${(kpis.totalCostValue/100000).toFixed(2)} L`} className="text-orange-500" />
         <KpiCard title="Need (15d Cover)" value={`₹${(kpis.capitalNeeded/100000).toFixed(2)} L`} className="text-primary" />
         <KpiCard title="Avg Cover" value={`${isFinite(kpis.avgCover) ? Math.round(kpis.avgCover) : 'N/A'} Days`} className="text-primary" />
         <KpiCard title="Stockouts (<8d)" value={`${kpis.stockouts} SKUs`} className="text-destructive" />
