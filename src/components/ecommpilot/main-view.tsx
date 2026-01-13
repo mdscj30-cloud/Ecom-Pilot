@@ -66,7 +66,7 @@ const channelIcons = {
 
 // --- IMPORTANT: Paste your Google Sheet URLs here ---
 const GOOGLE_SHEET_URLS: Record<'inventory' | 'b2b' | 'daily' | 'growth' | 'ads', string> = {
-  inventory: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQVPsje-s9qGXGpNTxiYZhNa5laEtzl0FLnbhjF8DoP7xsnwWF7YfH2C0ysSQi_HNHvkcPCI8YdqX8G/pub?output=csv', // For Daily Ops & Inventory tabs
+  inventory: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ8aT2iZjHC-0DPmQRRC0PuXwpYeL7Q90rKSK9MW-lQS-00so7YHmKrINP_v2KnNfi19FkGwJj4N-ph/pub?output=csv', // For Daily Ops & Inventory tabs
   b2b: 'YOUR_B2B_INVENTORY_SHEET_URL_HERE', // For B2B Inventory tab
   daily: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQXSEXlcVQfejFZ5SF7mBZbDXt-bnF9fBYbi8xfkQ_wOzFN6JeevfmFlhJhxOpTyAeNYbQeLKVr7pHv/pub?output=csv',    // For Daily P&L tab
   growth: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTVzF1bM5-_2rb-25uu4rHfDz-2wcp_O8FbDDr0JT4btPkRHJTMfj2_7ka2WVv8S255J_vdins3GhDv/pub?output=csv',      // For Growth tab
