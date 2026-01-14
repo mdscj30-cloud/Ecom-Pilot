@@ -173,9 +173,9 @@ export default function RecommendationsTab({
                             <span className="font-bold">{isFinite(rec.stockDays) ? `${Math.round(rec.stockDays)}d` : '∞'}</span>
                         </div>
                     </TableCell>
-                    <TableCell className="text-center font-mono">₹{rec.netValue.toFixed(0)}</TableCell>
-                    <TableCell className="text-center font-bold">{isFinite(rec.roas) ? rec.roas.toFixed(2) : 'N/A'}</TableCell>
-                    <TableCell className="text-center">{rec.returns.toFixed(1)}%</TableCell>
+                    <TableCell className={cn("text-center font-mono", rec.netValue > 300 ? 'text-green-600' : 'text-destructive')}>₹{rec.netValue.toFixed(0)}</TableCell>
+                    <TableCell className={cn("text-center font-bold", isFinite(rec.roas) && rec.roas > 3 ? 'text-green-600' : isFinite(rec.roas) && rec.roas < 1.5 ? 'text-destructive' : '')}>{isFinite(rec.roas) ? rec.roas.toFixed(2) : 'N/A'}</TableCell>
+                    <TableCell className={cn("text-center", rec.returns > 5 ? 'text-destructive' : '')}>{rec.returns.toFixed(1)}%</TableCell>
                     <TableCell className="text-center">{rec.reviews}</TableCell>
                     <TableCell className="p-3 text-center bg-blue-500/10">
                         {getActionBadge(rec.inventoryAction)}

@@ -347,13 +347,13 @@ export default function DailyOpsTab({
                                 <TableCell className="font-medium sticky left-12 z-10 bg-card">{item.name}</TableCell>
                                 <TableCell className="text-center">₹{item.price}</TableCell>
                                 <TableCell className="text-center text-muted-foreground">₹{item.shipping}</TableCell>
-                                <TableCell className="text-center font-mono text-sm">₹{Math.round(net)}</TableCell>
+                                <TableCell className={cn("text-center font-mono text-sm", net > 300 ? 'bg-green-500/10 text-green-700' : 'bg-red-500/10 text-red-700')}>{`₹${Math.round(net)}`}</TableCell>
                                 <TableCell className="text-center bg-primary/10 font-bold">{stockTotal}</TableCell>
                                 <TableCell className="text-center">{item.drr}</TableCell>
                                 <TableCell className={cn('text-center font-bold', stockDays < 5 ? 'text-destructive' : stockDays > 40 ? 'text-amber-500' : '')}>{isFinite(stockDays) ? `${Math.round(stockDays)}d` : '∞'}</TableCell>
-                                <TableCell className="text-center font-bold bg-accent/10">{roas.toFixed(2)}</TableCell>
-                                <TableCell className="text-center">{cvr.toFixed(1)}%</TableCell>
-                                <TableCell className="text-center">{ret.toFixed(1)}%</TableCell>
+                                <TableCell className={cn("text-center font-bold bg-accent/10", roas > 3 ? 'text-green-600' : roas < 1.5 ? 'text-destructive' : '')}>{roas.toFixed(2)}</TableCell>
+                                <TableCell className={cn("text-center", cvr > 10 ? 'text-green-600' : '')}>{cvr.toFixed(1)}%</TableCell>
+                                <TableCell className={cn("text-center", ret > 5 ? 'text-destructive' : '')}>{ret.toFixed(1)}%</TableCell>
                                 <TableCell className="text-center text-amber-500">{'★'.repeat(Math.round(item.rating||0))}</TableCell>
                                 <TableCell className="text-center text-muted-foreground">{item.reviews||0}</TableCell>
                                 <TableCell className="text-center"><Badge variant={decision.variant} className={cn('font-bold', decision.className)}>{decision.text}</Badge></TableCell>
@@ -368,5 +368,3 @@ export default function DailyOpsTab({
     </div>
   );
 }
-
-    

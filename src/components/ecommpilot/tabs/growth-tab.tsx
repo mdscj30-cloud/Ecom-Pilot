@@ -502,9 +502,9 @@ export default function GrowthTab({ data, onFileUpload, onCloudImport }: GrowthT
                                                 </CollapsibleTrigger>
                                             </TableCell>
                                             <TableCell className="font-medium">{item.month}</TableCell>
-                                            <TableCell className="text-right">₹{item.gmv.toLocaleString(undefined, {maximumFractionDigits: 0})}</TableCell>
-                                            <TableCell className="text-right">₹{item.adsSpent.toLocaleString(undefined, {maximumFractionDigits: 0})}</TableCell>
-                                            <TableCell className="text-right">{(item.tacos * 100).toFixed(2)}%</TableCell>
+                                            <TableCell className={cn("text-right", item.gmv > 500000 ? 'bg-green-500/10' : '')}>₹{item.gmv.toLocaleString(undefined, {maximumFractionDigits: 0})}</TableCell>
+                                            <TableCell className={cn("text-right", item.adsSpent > 100000 ? 'bg-red-500/10' : '')}>₹{item.adsSpent.toLocaleString(undefined, {maximumFractionDigits: 0})}</TableCell>
+                                            <TableCell className={cn("text-right", item.tacos > 0.2 ? 'text-destructive' : 'text-green-600')}>{(item.tacos * 100).toFixed(2)}%</TableCell>
                                             <TableCell className="text-right">{item.units.toLocaleString()}</TableCell>
                                             <TableCell className="text-right">₹{item.avgAsp.toFixed(0)}</TableCell>
                                         </TableRow>

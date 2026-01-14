@@ -166,12 +166,12 @@ export default function B2BInventoryTab({ data, searchTerm, onFileUpload, onClou
                                     <TableCell className="font-mono">{item.asin}</TableCell>
                                     <TableCell className="text-right font-mono">₹{item.listing_price.toFixed(2)}</TableCell>
                                     <TableCell className="text-right font-mono text-primary font-bold">₹{item.b2b_price.toFixed(2)}</TableCell>
-                                    <TableCell className="text-right text-blue-500 font-bold bg-blue-500/10">{item.warehouse_stock > 0 ? item.warehouse_stock.toLocaleString() : '-'}</TableCell>
-                                    <TableCell className="text-right font-bold bg-primary/10">{item.stock.toLocaleString()}</TableCell>
+                                    <TableCell className={cn("text-right font-bold bg-blue-500/10", item.warehouse_stock > 1000 ? 'text-blue-700' : 'text-blue-500')}>{item.warehouse_stock > 0 ? item.warehouse_stock.toLocaleString() : '-'}</TableCell>
+                                    <TableCell className={cn("text-right font-bold bg-primary/10", item.stock > 500 ? 'text-primary' : '')}>{item.stock.toLocaleString()}</TableCell>
                                     <TableCell className="text-right">{item.drr}</TableCell>
                                     <TableCell 
                                         className={cn("text-right font-bold", 
-                                            doc < 15 ? 'text-destructive' : doc > 60 ? 'text-amber-600' : 'text-green-600'
+                                            doc < 15 ? 'text-destructive bg-destructive/10' : doc > 60 ? 'text-amber-600 bg-amber-500/10' : 'text-green-600'
                                         )}
                                     >
                                         {isFinite(doc) ? `${Math.round(doc)}d` : '∞'}
