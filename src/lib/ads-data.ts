@@ -1,3 +1,4 @@
+
 import type {
   Campaign,
   AdGroup,
@@ -80,6 +81,10 @@ export const adsDailyMetrics: AdsDailyMetrics[] = [
     cvr: 0.068,
     roas: 3.63,
     tacos: 0.27,
+    acos: 0.35,
+    incremental_gmv: 8000,
+    paid_gmv: 14800,
+    organic_gmv: 4100
   },
   {
     date: '2026-01-08',
@@ -96,6 +101,10 @@ export const adsDailyMetrics: AdsDailyMetrics[] = [
     cvr: 0.05,
     roas: 2.25,
     tacos: 0.44,
+    acos: 0.55,
+    incremental_gmv: 1500,
+    paid_gmv: 3600,
+    organic_gmv: 900
   },
    {
     date: '2026-01-08',
@@ -112,6 +121,10 @@ export const adsDailyMetrics: AdsDailyMetrics[] = [
     cvr: 0.0,
     roas: 0.0,
     tacos: 1.0,
+    acos: 1.0,
+    incremental_gmv: 0,
+    paid_gmv: 0,
+    organic_gmv: 0
   },
 ];
 
@@ -245,3 +258,5 @@ export const actionLogs: ActionLog[] = [
     timestamp: '2026-01-08T11:05',
   },
 ];
+
+    

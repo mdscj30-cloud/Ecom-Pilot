@@ -313,6 +313,10 @@ export default function MainView() {
                 cvr: parseFloat(item.cvr) || 0,
                 roas: parseFloat(item.roas) || 0,
                 tacos: parseFloat(item.tacos) || 0,
+                acos: parseFloat(item.acos) || 0,
+                incremental_gmv: parseFloat(item.incremental_gmv) || 0,
+                paid_gmv: parseFloat(item.paid_gmv) || 0,
+                organic_gmv: parseFloat(item.organic_gmv) || 0,
             });
 
              if(!newInventory.find(i => i.sku_code === item.sku_code)) {
@@ -671,3 +675,5 @@ export default function MainView() {
     </>
   );
 }
+
+    

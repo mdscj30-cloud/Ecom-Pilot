@@ -178,6 +178,10 @@ export default function AdsControlCenterTab({
                         <TableHead className="text-right">GMV (₹)</TableHead>
                         <TableHead className="text-right">ROAS</TableHead>
                         <TableHead className="text-right">TACOS</TableHead>
+                        <TableHead className="text-right">ACOS</TableHead>
+                        <TableHead className="text-right">Inc GMV</TableHead>
+                        <TableHead className="text-right">Paid GMV</TableHead>
+                        <TableHead className="text-right">Organic GMV</TableHead>
                         <TableHead className="text-right">Stock Cover</TableHead>
                         <TableHead className="text-center">Decision</TableHead>
                         <TableHead className="text-center">Action</TableHead>
@@ -197,7 +201,11 @@ export default function AdsControlCenterTab({
                         <TableCell className="text-right font-mono">{(item.ads_spent || 0).toLocaleString()}</TableCell>
                         <TableCell className="text-right font-mono">{(item.gmv || 0).toLocaleString()}</TableCell>
                         <TableCell className={cn("text-right font-bold", (item.roas || 0) > 3 ? 'text-green-600' : (item.roas || 0) < 2 ? 'text-destructive' : '')}>{(item.roas || 0).toFixed(2)}</TableCell>
-                        <TableCell className="text-right">{(item.tacos || 0).toFixed(2)}</TableCell>
+                        <TableCell className="text-right font-mono">{(item.tacos || 0).toFixed(2)}</TableCell>
+                        <TableCell className="text-right font-mono">{(item.acos || 0).toFixed(2)}</TableCell>
+                        <TableCell className="text-right font-mono">{(item.incremental_gmv || 0).toLocaleString()}</TableCell>
+                        <TableCell className="text-right font-mono">{(item.paid_gmv || 0).toLocaleString()}</TableCell>
+                        <TableCell className="text-right font-mono">{(item.organic_gmv || 0).toLocaleString()}</TableCell>
                         <TableCell className={cn("text-right font-bold", (item.stock_cover_days || 0) < 7 ? 'text-destructive' : '')}>
                             {item.stock_cover_days ? `${item.stock_cover_days.toFixed(1)}d` : 'N/A'}
                         </TableCell>
@@ -329,3 +337,5 @@ export default function AdsControlCenterTab({
     </div>
   )
 }
+
+    

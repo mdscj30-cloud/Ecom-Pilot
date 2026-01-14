@@ -1,3 +1,4 @@
+
 export interface InventoryItem {
   id: number;
   channel: "Meesho" | "Amazon" | string;
@@ -198,6 +199,10 @@ export interface AdsDailyMetrics {
   cvr: number;
   roas: number;
   tacos: number;
+  acos: number;
+  incremental_gmv: number;
+  paid_gmv: number;
+  organic_gmv: number;
 }
 
 export interface InventorySnapshot {
@@ -253,3 +258,5 @@ export interface ActionLog {
   triggered_by: 'AUTO_ENGINE' | 'MANUAL_OVERRIDE';
   timestamp: string;
 }
+
+    
