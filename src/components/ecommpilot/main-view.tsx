@@ -70,7 +70,7 @@ const GOOGLE_SHEET_URLS: Record<'inventory' | 'b2b' | 'daily' | 'growth' | 'ads'
   b2b: 'YOUR_B2B_INVENTORY_SHEET_URL_HERE', // For B2B Inventory tab
   daily: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQXSEXlcVQfejFZ5SF7mBZbDXt-bnF9fBYbi8xfkQ_wOzFN6JeevfmFlhJhxOpTyAeNYbQeLKVr7pHv/pub?output=csv',    // For Daily P&L tab
   growth: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTVzF1bM5-_2rb-25uu4rHfDz-2wcp_O8FbDDr0JT4btPkRHJTMfj2_7ka2WVv8S255J_vdins3GhDv/pub?output=csv',      // For Growth tab
-  ads: 'YOUR_ADS_CONTROL_CENTER_SHEET_URL_HERE',      // For Ads Control Center tab
+  ads: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSb6otA8iFwegPfX48Hk0HE8zag28a6wwXuRIpreod2_3SWpZ_tg7oGyczCPfJPDdgVlrqjoxk5pNc2/pub?output=csv',      // For Ads Control Center tab
 };
 // ----------------------------------------------------
 
