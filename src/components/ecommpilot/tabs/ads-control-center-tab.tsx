@@ -194,46 +194,40 @@ export default function AdsControlCenterTab({
   }, [adsDailyMetrics, dateRange, compareDateRange, isComparing, selectedChartPlatform]);
 
   const criticalAlerts = useMemo(() => {
-      if (!isComparing || comparisonPeriod.platformPerformance.length === 0) return [];
       const alerts: {platform: string, message: string, type: 'CRITICAL' | 'OPPORTUNITY' | 'EFFICIENCY'}[] = [];
 
       currentPeriod.platformPerformance.forEach(current => {
-          const compare = comparisonPeriod.platformPerformance.find(c => c.name === current.name);
-          if (!compare) return;
+          const rules = controlThresholds.find(t => t.platform_id === current.name);
 
-          const roasChange = compare.roas > 0 ? (current.roas - compare.roas) / compare.roas : 0;
-          const spendChange = compare.spend > 0 ? (current.spend - compare.spend) / compare.spend : 0;
-          const gmvChange = compare.gmv > 0 ? (current.gmv - compare.gmv) / compare.gmv : 0;
-
-          // ROAS Drop Alert
-          if (roasChange < -0.25) { 
+          // ROAS check
+          if (current.roas < (rules?.min_roas ?? 2.0)) { 
               alerts.push({
                   platform: current.name,
-                  message: `ROAS dropped by ${Math.abs(roasChange * 100).toFixed(0)}% to ${current.roas.toFixed(2)}.`,
+                  message: `ROAS is ${current.roas.toFixed(2)}, which is below the minimum target of ${rules?.min_roas ?? 2.0}.`,
                   type: 'CRITICAL'
               });
           }
 
-          // Wasted Spend Alert
-          if (spendChange > 0.5 && gmvChange < spendChange / 2) {
+          // Wasted Spend Check
+          if (current.spend > 5000 && (current.gmv / current.spend) < 1.5) {
                alerts.push({
                   platform: current.name,
-                  message: `Spend is up ${Math.abs(spendChange * 100).toFixed(0)}% but GMV growth is lagging significantly.`,
+                  message: `High ad spend of ₹${current.spend.toLocaleString()} is yielding a low ROAS of ${current.roas.toFixed(2)}.`,
                   type: 'EFFICIENCY'
               });
           }
 
           // Opportunity Alert
-          if (current.roas > 4.0 && roasChange > 0.1) {
+          if (current.roas > (rules?.target_roas ?? 4.0)) {
              alerts.push({
                   platform: current.name,
-                  message: `ROAS is strong and growing (${current.roas.toFixed(2)}). Consider scaling budget.`,
+                  message: `ROAS is strong at ${current.roas.toFixed(2)}. Consider scaling budget to capture more growth.`,
                   type: 'OPPORTUNITY'
               });
           }
       });
       return alerts;
-  }, [currentPeriod, comparisonPeriod, isComparing]);
+  }, [currentPeriod.platformPerformance, controlThresholds]);
   
   const handleEdit = (threshold: ControlThresholds) => {
     setEditingThresholdId(threshold.id);
@@ -512,7 +506,7 @@ export default function AdsControlCenterTab({
                     ) : (
                         <div className="text-center text-muted-foreground py-8">
                             <p>No critical alerts for the selected period.</p>
-                            <p className="text-xs">Enable compare mode to see performance-based alerts.</p>
+                            <p className="text-xs">The system is continuously monitoring performance.</p>
                         </div>
                     )}
                 </CardContent>
