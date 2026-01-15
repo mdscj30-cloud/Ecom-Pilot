@@ -318,14 +318,14 @@ export default function MainView() {
 
 
             const getMetric = (name: string, transform: (val: any) => number = parseFloat) => {
-                const row = metricRows[name];
+                const row = metricRows[name.toLowerCase()];
                 return row && row[colIndex] ? transform(row[colIndex]) : 0;
             };
 
-            const gmv = getMetric('gmv');
+            const gmv = getMetric('gmv') || getMetric('ad sales');
             const ads_spent = getMetric('ad spends');
             const roas = getMetric('ad roas');
-            const acos = getMetric('acos'); // Assuming acos might be in the sheet
+            const acos = getMetric('acos');
             const clicks = getMetric('clicks', parseInt);
             const impressions = getMetric('views', parseInt);
             const orders = getMetric('ad units', parseInt);
@@ -357,6 +357,7 @@ export default function MainView() {
                 newCampaigns.push({
                     campaign_id: metric.campaign_id,
                     platform_id: platform,
+                    campaign_name: `${platform} Campaign`,
                     account_id: `${platform}_ads`,
                     phase: 'Phase 1',
                     objective: 'Conversions',
@@ -716,3 +717,4 @@ export default function MainView() {
     
 
     
+
