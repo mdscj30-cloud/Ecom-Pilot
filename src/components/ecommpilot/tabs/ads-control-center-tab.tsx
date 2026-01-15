@@ -195,28 +195,41 @@ export default function AdsControlCenterTab({
 
   const criticalAlerts = useMemo(() => {
       if (!isComparing || comparisonPeriod.platformPerformance.length === 0) return [];
-      const alerts: {platform: string, message: string}[] = [];
+      const alerts: {platform: string, message: string, type: 'CRITICAL' | 'OPPORTUNITY' | 'EFFICIENCY'}[] = [];
 
       currentPeriod.platformPerformance.forEach(current => {
           const compare = comparisonPeriod.platformPerformance.find(c => c.name === current.name);
-          if (compare && compare.roas > 0) {
-              const roasChange = (current.roas - compare.roas) / compare.roas;
-              if (roasChange < -0.25) { // 25% drop
-                  alerts.push({
-                      platform: current.name,
-                      message: `ROAS dropped by ${Math.abs(roasChange * 100).toFixed(0)}% to ${current.roas.toFixed(2)}.`
-                  });
-              }
+          if (!compare) return;
+
+          const roasChange = compare.roas > 0 ? (current.roas - compare.roas) / compare.roas : 0;
+          const spendChange = compare.spend > 0 ? (current.spend - compare.spend) / compare.spend : 0;
+          const gmvChange = compare.gmv > 0 ? (current.gmv - compare.gmv) / compare.gmv : 0;
+
+          // ROAS Drop Alert
+          if (roasChange < -0.25) { 
+              alerts.push({
+                  platform: current.name,
+                  message: `ROAS dropped by ${Math.abs(roasChange * 100).toFixed(0)}% to ${current.roas.toFixed(2)}.`,
+                  type: 'CRITICAL'
+              });
           }
-           if (compare && compare.spend > 0) {
-              const spendChange = (current.spend - compare.spend) / compare.spend;
-              const gmvChange = compare.gmv > 0 ? (current.gmv - compare.gmv) / compare.gmv : spendChange;
-              if (spendChange > 0.5 && gmvChange < spendChange / 2) {
-                   alerts.push({
-                      platform: current.name,
-                      message: `Spend is up ${Math.abs(spendChange * 100).toFixed(0)}% but GMV growth is lagging.`
-                  });
-              }
+
+          // Wasted Spend Alert
+          if (spendChange > 0.5 && gmvChange < spendChange / 2) {
+               alerts.push({
+                  platform: current.name,
+                  message: `Spend is up ${Math.abs(spendChange * 100).toFixed(0)}% but GMV growth is lagging significantly.`,
+                  type: 'EFFICIENCY'
+              });
+          }
+
+          // Opportunity Alert
+          if (current.roas > 4.0 && roasChange > 0.1) {
+             alerts.push({
+                  platform: current.name,
+                  message: `ROAS is strong and growing (${current.roas.toFixed(2)}). Consider scaling budget.`,
+                  type: 'OPPORTUNITY'
+              });
           }
       });
       return alerts;
@@ -484,7 +497,11 @@ export default function AdsControlCenterTab({
                         <ul className="space-y-3">
                             {criticalAlerts.map((alert, i) => (
                                 <li key={i} className="flex items-start gap-3 text-xs">
-                                    <AlertOctagon className="w-4 h-4 mt-0.5 text-destructive flex-shrink-0"/>
+                                     <div className="mt-0.5">
+                                        {alert.type === 'CRITICAL' && <AlertOctagon className="w-4 h-4 text-destructive flex-shrink-0"/>}
+                                        {alert.type === 'EFFICIENCY' && <Flame className="w-4 h-4 text-amber-500 flex-shrink-0"/>}
+                                        {alert.type === 'OPPORTUNITY' && <Zap className="w-4 h-4 text-green-500 flex-shrink-0"/>}
+                                    </div>
                                     <div>
                                         <p className="font-bold text-foreground capitalize">{alert.platform}</p>
                                         <p className="text-muted-foreground">{alert.message}</p>
@@ -504,3 +521,5 @@ export default function AdsControlCenterTab({
     </div>
   )
 }
+
+    
