@@ -258,102 +258,139 @@ export default function MainView() {
         }
         setB2bInventoryData(importedData);
       } else if (type === 'ads') {
-        const headers: string[] = json[0].map((h:string) => h.toLowerCase().replace(/\s+/g, '_'));
-        const newAdGroups: AdGroup[] = [];
-        const newCampaigns: Campaign[] = [];
         const newMetrics: AdsDailyMetrics[] = [];
-        const newInventory: InventorySnapshot[] = [];
-        const newDecisions: DecisionEngineOutput[] = [];
+        const newCampaigns: Campaign[] = [];
+        const newAdGroups: AdGroup[] = [];
 
-        json.slice(1).forEach((row: any[], index: number) => {
-          const item: any = {};
-          headers.forEach((header, i) => {
-            item[header] = row[i];
-          });
-          
-          if(item.campaign_id && !newCampaigns.find(c => c.campaign_id === item.campaign_id)) {
-            newCampaigns.push({
-              campaign_id: item.campaign_id,
-              platform_id: item.platform_id,
-              account_id: item.account_id,
-              phase: item.phase,
-              objective: 'Conversions',
-              status: item.campaign_status || 'active',
-              daily_budget: 0,
-              auto_scale: true,
-              created_at: new Date().toISOString(),
-            });
-          }
+        let currentPlatform = '';
+        let dateRow: any[] = [];
+        let platformDataBlocks: { platform: string, startIndex: number, endIndex: number }[] = [];
 
-          if(item.ad_group_id && !newAdGroups.find(ag => ag.ad_group_id === item.ad_group_id)) {
-            newAdGroups.push({
-              ad_group_id: item.ad_group_id,
-              campaign_id: item.campaign_id,
-              sku_code: item.sku_code,
-              pack_size: 0,
-              status: item.ad_group_status || 'active',
-              bid_type: 'auto',
-              max_cpc: 0,
-            });
-          }
-
-          if(item.sku_code) {
-             newMetrics.push({
-                date: item.date,
-                platform_id: item.platform_id,
-                campaign_id: item.campaign_id,
-                ad_group_id: item.ad_group_id,
-                sku_code: item.sku_code,
-                impressions: parseInt(item.impressions, 10) || 0,
-                clicks: parseInt(item.clicks, 10) || 0,
-                orders: parseInt(item.orders, 10) || 0,
-                gmv: parseFloat(item.gmv) || 0,
-                ads_spent: parseFloat(item.ads_spent) || 0,
-                ctr: parseFloat(item.ctr) || 0,
-                cvr: parseFloat(item.cvr) || 0,
-                roas: parseFloat(item.roas) || 0,
-                tacos: parseFloat(item.tacos) || 0,
-                acos: parseFloat(item.acos) || 0,
-                incremental_gmv: parseFloat(item.incremental_gmv) || 0,
-                paid_gmv: parseFloat(item.paid_gmv) || 0,
-                organic_gmv: parseFloat(item.organic_gmv) || 0,
-            });
-
-             if(!newInventory.find(i => i.sku_code === item.sku_code)) {
-               newInventory.push({
-                  sku_code: item.sku_code,
-                  current_stock: parseInt(item.current_stock, 10) || 0,
-                  drr: parseInt(item.drr, 10) || 0,
-                  stock_cover_days: parseFloat(item.stock_cover_days) || 0,
-                  last_updated: new Date().toISOString(),
-               });
-             }
-
-             if(!newDecisions.find(d => d.ad_group_id === item.ad_group_id)) {
-                newDecisions.push({
-                  date: item.date,
-                  platform_id: item.platform_id,
-                  ad_group_id: item.ad_group_id,
-                  decision: item.decision,
-                  reason_codes: item.reason_codes ? item.reason_codes.split(',') : [],
-                  recommended_action: {
-                    new_daily_budget: 0,
-                    change_pct: 0
-                  }
-                });
-             }
+        // Find all platform data blocks
+        json.forEach((row: any[], rowIndex: number) => {
+          const firstCell = row[0] || '';
+          if (typeof firstCell === 'string' && firstCell.trim().length > 2 && isNaN(parseInt(firstCell))) {
+            const potentialPlatform = firstCell.trim();
+            const nextRow = json[rowIndex + 1] || [];
+            if(String(nextRow[0]).trim().toLowerCase() === 'date') {
+               if (platformDataBlocks.length > 0) {
+                  platformDataBlocks[platformDataBlocks.length - 1].endIndex = rowIndex - 1;
+               }
+               platformDataBlocks.push({ platform: potentialPlatform, startIndex: rowIndex, endIndex: json.length - 1 });
+            }
           }
         });
+         if (platformDataBlocks.length > 0) {
+            platformDataBlocks[platformDataBlocks.length - 1].endIndex = json.length - 1;
+         }
+
+
+        platformDataBlocks.forEach(block => {
+          const platform = block.platform;
+          const platformRows = json.slice(block.startIndex, block.endIndex + 1);
+          
+          const headerRowIndex = platformRows.findIndex(r => String(r[0]).trim().toLowerCase() === 'date');
+          if (headerRowIndex === -1) return;
+
+          const dateRow = platformRows[headerRowIndex];
+          const metricRows: { [key: string]: any[] } = {};
+
+          platformRows.slice(headerRowIndex + 1).forEach(row => {
+             const metricName = String(row[0]).trim().toLowerCase();
+             if(metricName) {
+                metricRows[metricName] = row;
+             }
+          });
+          
+          dateRow.forEach((dateValue, colIndex) => {
+            if (colIndex === 0 || !dateValue) return;
+
+            let date: Date | null = null;
+            if (typeof dateValue === 'number') {
+                const excelDate = new Date(1899, 11, 30);
+                excelDate.setDate(excelDate.getDate() + dateValue);
+                date = excelDate;
+            } else if (typeof dateValue === 'string') {
+                const parsed = parse(dateValue, "dd-MM-yyyy", new Date());
+                if(isValid(parsed)) date = parsed;
+            }
+             if (!date) return;
+
+
+            const getMetric = (name: string, transform: (val: any) => number = parseFloat) => {
+                const row = metricRows[name];
+                return row && row[colIndex] ? transform(row[colIndex]) : 0;
+            };
+
+            const gmv = getMetric('gmv');
+            const ads_spent = getMetric('ad spends');
+            const roas = getMetric('ad roas');
+            const acos = getMetric('acos'); // Assuming acos might be in the sheet
+            const clicks = getMetric('clicks', parseInt);
+            const impressions = getMetric('views', parseInt);
+            const orders = getMetric('ad units', parseInt);
+
+
+             const metric: AdsDailyMetrics = {
+                date: format(date, 'yyyy-MM-dd'),
+                platform_id: platform,
+                campaign_id: `${platform.toUpperCase().substring(0,3)}_CAMPAIGN`,
+                ad_group_id: `${platform.toUpperCase().substring(0,3)}_ADGROUP_${colIndex}`,
+                sku_code: `${platform.toUpperCase().substring(0,3)}_SKU_${colIndex}`,
+                impressions,
+                clicks,
+                orders,
+                gmv,
+                ads_spent,
+                ctr: impressions > 0 ? clicks / impressions : 0,
+                cvr: clicks > 0 ? orders / clicks : 0,
+                roas,
+                tacos: gmv > 0 ? ads_spent / gmv : 0,
+                acos,
+                incremental_gmv: gmv * 0.2, // Mocked
+                paid_gmv: gmv * 0.8, // Mocked
+                organic_gmv: gmv * 0.2, // Mocked
+            };
+            newMetrics.push(metric);
+            
+            if(!newCampaigns.find(c => c.campaign_id === metric.campaign_id)){
+                newCampaigns.push({
+                    campaign_id: metric.campaign_id,
+                    platform_id: platform,
+                    account_id: `${platform}_ads`,
+                    phase: 'Phase 1',
+                    objective: 'Conversions',
+                    status: 'active',
+                    daily_budget: 1000,
+                    auto_scale: true,
+                    created_at: new Date().toISOString()
+                });
+            }
+            if(!newAdGroups.find(ag => ag.ad_group_id === metric.ad_group_id)){
+                newAdGroups.push({
+                    ad_group_id: metric.ad_group_id,
+                    campaign_id: metric.campaign_id,
+                    sku_code: metric.sku_code,
+                    pack_size: 1,
+                    status: 'active',
+                    bid_type: 'auto',
+                    max_cpc: 10
+                });
+            }
+          });
+        });
         
-        if (newAdGroups.length === 0) {
-            throw new Error("No valid ads data was parsed. Check column headers like 'ad_group_id', 'sku_code', etc.");
+        if (newMetrics.length === 0) {
+            throw new Error("No valid ads data was parsed from the complex matrix format. Check platform headers and date rows.");
         }
 
         setCampaigns(newCampaigns);
         setAdGroups(newAdGroups);
         setAdsDailyMetrics(newMetrics);
-        setInventorySnapshots(newInventory);
-        setDecisionEngineOutputs(newDecisions);
+        // We don't get inventory or decision data from this sheet, so we'll leave them as is or clear them.
+        // setInventorySnapshots([]);
+        // setDecisionEngineOutputs([]);
+
 
       } else if (type === 'daily' || type === 'growth') {
             const header1: string[] = json[0] || [];
@@ -675,5 +712,7 @@ export default function MainView() {
     </>
   );
 }
+
+    
 
     
