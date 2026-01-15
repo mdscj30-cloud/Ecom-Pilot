@@ -32,6 +32,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface AdsControlCenterTabProps {
     campaigns: Campaign[];
@@ -79,6 +80,7 @@ export default function AdsControlCenterTab({
   const [isComparing, setIsComparing] = useState(false);
   const [dateRange, setDateRange] = useState<DateRange | undefined>({ from: subDays(startOfToday(), 7), to: endOfToday() });
   const [compareDateRange, setCompareDateRange] = useState<DateRange | undefined>({ from: subDays(startOfToday(), 14), to: subDays(endOfToday(), 7) });
+  const [selectedChartPlatform, setSelectedChartPlatform] = useState<string>('All');
 
 
   const allPlatforms = useMemo(() => Array.from(new Set(adsDailyMetrics.map(m => m.platform_id))), [adsDailyMetrics]);
@@ -107,8 +109,10 @@ export default function AdsControlCenterTab({
   }, [allPlatforms]);
   
 
-  const processPeriodData = (data: AdsDailyMetrics[]) => {
+  const processPeriodData = (data: AdsDailyMetrics[], platformFilter: string) => {
       if (!data) return { kpis: { totalSpend: 0, totalGmv: 0, blendedRoas: 0 }, chartData: [], platformPerformance: [] };
+
+      const filteredDataForChart = platformFilter === 'All' ? data : data.filter(d => d.platform_id === platformFilter);
 
       const kpis = data.reduce((acc, item) => {
           acc.totalSpend += item.ads_spent || 0;
@@ -119,7 +123,7 @@ export default function AdsControlCenterTab({
       const blendedRoas = kpis.totalGmv / kpis.totalSpend || 0;
 
       const dailyDataMap: { [day: string]: any } = {};
-      data.forEach(metric => {
+      filteredDataForChart.forEach(metric => {
           const day = format(new Date(metric.date), 'dd/MM');
           if (!dailyDataMap[day]) {
               dailyDataMap[day] = { day, gmv: 0, ads_spent: 0 };
@@ -182,12 +186,12 @@ export default function AdsControlCenterTab({
     const sortedDates = Array.from(dateSet).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
 
     return {
-        currentPeriod: processPeriodData(currentData),
-        comparisonPeriod: processPeriodData(compareData),
+        currentPeriod: processPeriodData(currentData, selectedChartPlatform),
+        comparisonPeriod: processPeriodData(compareData, selectedChartPlatform),
         matrixData: matrix,
         dates: sortedDates
     };
-  }, [adsDailyMetrics, dateRange, compareDateRange, isComparing]);
+  }, [adsDailyMetrics, dateRange, compareDateRange, isComparing, selectedChartPlatform]);
 
   const criticalAlerts = useMemo(() => {
       if (!isComparing || comparisonPeriod.platformPerformance.length === 0) return [];
@@ -331,7 +335,18 @@ export default function AdsControlCenterTab({
         </div>
         
         <Card>
-            <CardHeader><CardTitle className="text-base">Performance Over Time</CardTitle></CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle className="text-base">Performance Over Time</CardTitle>
+                <Select value={selectedChartPlatform} onValueChange={setSelectedChartPlatform}>
+                    <SelectTrigger className="w-[180px] h-9">
+                        <SelectValue placeholder="Select Platform" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="All">All Platforms</SelectItem>
+                        {allPlatforms.map(p => <SelectItem key={p} value={p} className="capitalize">{p}</SelectItem>)}
+                    </SelectContent>
+                </Select>
+            </CardHeader>
             <CardContent>
                  <ChartContainer config={chartConfig} className="h-[250px] w-full">
                     <ComposedChart data={currentPeriod.chartData}>
@@ -489,5 +504,3 @@ export default function AdsControlCenterTab({
     </div>
   )
 }
-
-    
