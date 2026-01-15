@@ -43,6 +43,21 @@ interface AdsControlCenterTabProps {
     onCloudImport: () => void;
 }
 
+type PlatformDailySummary = {
+  date: string;
+  platform_id: string;
+  impressions: number;
+  clicks: number;
+  orders: number;
+  gmv: number;
+  ads_spent: number;
+  ctr: number;
+  cvr: number;
+  roas: number;
+  tacos: number;
+  acos: number;
+};
+
 
 export default function AdsControlCenterTab({
     campaigns,
@@ -57,42 +72,56 @@ export default function AdsControlCenterTab({
   const [editingThresholdId, setEditingThresholdId] = useState<string | null>(null);
   const [editedThresholds, setEditedThresholds] = useState<Partial<ControlThresholds>>({});
 
-  const combinedData = useMemo(() => {
-    return adGroups.map(adGroup => {
-      const campaign = campaigns.find(c => c.campaign_id === adGroup.campaign_id);
-      const metrics = adsDailyMetrics.find(m => m.ad_group_id === adGroup.ad_group_id);
-      const inventory = inventorySnapshots.find(i => i.sku_code === adGroup.sku_code);
-      const decision = decisionEngineOutputs.find(d => d.ad_group_id === adGroup.ad_group_id);
+  const platformDailySummary = useMemo(() => {
+    const summary: { [key: string]: PlatformDailySummary } = {};
 
-      return {
-        ...adGroup,
-        campaignName: campaign?.campaign_name || 'N/A',
-        phase: campaign?.phase || 'N/A',
-        platform: campaign?.platform_id || 'N/A',
-        ...metrics,
-        ...inventory,
-        decision,
-      };
+    adsDailyMetrics.forEach(metric => {
+      const key = `${metric.date}-${metric.platform_id}`;
+      if (!summary[key]) {
+        summary[key] = {
+          date: metric.date,
+          platform_id: metric.platform_id,
+          impressions: 0,
+          clicks: 0,
+          orders: 0,
+          gmv: 0,
+          ads_spent: 0,
+          ctr: 0,
+          cvr: 0,
+          roas: 0,
+          tacos: 0,
+          acos: 0,
+        };
+      }
+      summary[key].impressions += metric.impressions;
+      summary[key].clicks += metric.clicks;
+      summary[key].orders += metric.orders;
+      summary[key].gmv += metric.gmv;
+      summary[key].ads_spent += metric.ads_spent;
     });
-  }, [campaigns, adGroups, adsDailyMetrics, inventorySnapshots, decisionEngineOutputs]);
+
+    return Object.values(summary).map(s => {
+      s.ctr = s.impressions > 0 ? s.clicks / s.impressions : 0;
+      s.cvr = s.clicks > 0 ? s.orders / s.clicks : 0;
+      s.roas = s.ads_spent > 0 ? s.gmv / s.ads_spent : 0;
+      // Assuming TACOS requires total GMV, which might not be available at this level
+      // For now, let's use the same logic as ROAS's denominator
+      s.tacos = s.gmv > 0 ? s.ads_spent / s.gmv : 0;
+      s.acos = s.gmv > 0 ? s.ads_spent / s.gmv : 0;
+      return s;
+    }).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+  }, [adsDailyMetrics]);
+
 
   const overallKpis = useMemo(() => {
-    return combinedData.reduce((acc, item) => {
+    return adsDailyMetrics.reduce((acc, item) => {
         acc.totalSpend += item.ads_spent || 0;
         acc.totalGmv += item.gmv || 0;
         return acc;
     }, { totalSpend: 0, totalGmv: 0 });
-  }, [combinedData]);
+  }, [adsDailyMetrics]);
 
-  const getDecisionBadge = (decision?: DecisionEngineOutput['decision']) => {
-    switch (decision) {
-      case 'SCALE': return <Badge className="bg-green-600/20 text-green-700 hover:bg-green-600/30"><ArrowUp className="mr-1.5 h-3 w-3"/>Scale</Badge>;
-      case 'MAINTAIN': return <Badge variant="secondary"><MinusCircle className="mr-1.5 h-3 w-3"/>Maintain</Badge>;
-      case 'CUT': return <Badge className="bg-amber-500/20 text-amber-700 hover:bg-amber-500/30"><ArrowDown className="mr-1.5 h-3 w-3"/>Cut</Badge>;
-      case 'PAUSE': return <Badge variant="destructive"><PauseCircle className="mr-1.5 h-3 w-3"/>Pause</Badge>;
-      default: return <Badge variant="outline">N/A</Badge>;
-    }
-  };
 
   const handleEdit = (threshold: ControlThresholds) => {
     setEditingThresholdId(threshold.id);
@@ -165,69 +194,39 @@ export default function AdsControlCenterTab({
         </div>
 
         <Card>
-            <CardHeader><CardTitle className="text-base flex items-center gap-2"><Zap className="w-5 h-5 text-primary"/>SKU-Level Ads Control</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-base flex items-center gap-2"><Zap className="w-5 h-5 text-primary"/>Platform-Level Ads Control</CardTitle></CardHeader>
             <CardContent>
                 <div className="overflow-x-auto custom-scrollbar">
                 <Table>
                     <TableHeader>
                     <TableRow>
-                        <TableHead className="min-w-[150px]">SKU / Ad Group</TableHead>
-                        <TableHead className="text-center">Platform</TableHead>
-                        <TableHead className="text-center">Status</TableHead>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Platform</TableHead>
+                        <TableHead className="text-right">Impressions</TableHead>
+                        <TableHead className="text-right">Clicks</TableHead>
+                        <TableHead className="text-right">Orders</TableHead>
                         <TableHead className="text-right">Ad Spend (₹)</TableHead>
                         <TableHead className="text-right">GMV (₹)</TableHead>
                         <TableHead className="text-right">ROAS</TableHead>
                         <TableHead className="text-right">TACOS</TableHead>
                         <TableHead className="text-right">ACOS</TableHead>
-                        <TableHead className="text-right">Inc GMV</TableHead>
-                        <TableHead className="text-right">Paid GMV</TableHead>
-                        <TableHead className="text-right">Organic GMV</TableHead>
-                        <TableHead className="text-right">Stock Cover</TableHead>
-                        <TableHead className="text-center">Decision</TableHead>
-                        <TableHead className="text-center">Action</TableHead>
                     </TableRow>
                     </TableHeader>
                     <TableBody>
-                    {combinedData.map(item => (
-                        <TableRow key={item.ad_group_id}>
+                    {platformDailySummary.map(item => (
+                        <TableRow key={`${item.date}-${item.platform_id}`}>
                         <TableCell className="font-medium text-foreground">
-                            <div>{item.sku_code}</div>
-                            <div className="text-xs text-muted-foreground">{item.ad_group_id}</div>
+                           {new Date(item.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
                         </TableCell>
-                        <TableCell className="text-center capitalize">{item.platform}</TableCell>
-                        <TableCell className="text-center capitalize">
-                            <Badge variant={item.status === 'active' ? 'default' : 'secondary'} className={cn(item.status === 'active' ? 'bg-green-600/20 text-green-700' : '')}>{item.status}</Badge>
-                        </TableCell>
+                        <TableCell className="font-medium capitalize">{item.platform_id}</TableCell>
+                        <TableCell className="text-right font-mono">{(item.impressions || 0).toLocaleString()}</TableCell>
+                        <TableCell className="text-right font-mono">{(item.clicks || 0).toLocaleString()}</TableCell>
+                        <TableCell className="text-right font-mono">{(item.orders || 0).toLocaleString()}</TableCell>
                         <TableCell className="text-right font-mono">{(item.ads_spent || 0).toLocaleString()}</TableCell>
                         <TableCell className="text-right font-mono">{(item.gmv || 0).toLocaleString()}</TableCell>
                         <TableCell className={cn("text-right font-bold", (item.roas || 0) > 3 ? 'text-green-600' : (item.roas || 0) < 2 ? 'text-destructive' : '')}>{(item.roas || 0).toFixed(2)}</TableCell>
                         <TableCell className="text-right font-mono">{(item.tacos || 0).toFixed(2)}</TableCell>
                         <TableCell className="text-right font-mono">{(item.acos || 0).toFixed(2)}</TableCell>
-                        <TableCell className="text-right font-mono">{(item.incremental_gmv || 0).toLocaleString()}</TableCell>
-                        <TableCell className="text-right font-mono">{(item.paid_gmv || 0).toLocaleString()}</TableCell>
-                        <TableCell className="text-right font-mono">{(item.organic_gmv || 0).toLocaleString()}</TableCell>
-                        <TableCell className={cn("text-right font-bold", (item.stock_cover_days || 0) < 7 ? 'text-destructive' : '')}>
-                            {item.stock_cover_days ? `${item.stock_cover_days.toFixed(1)}d` : 'N/A'}
-                        </TableCell>
-                        <TableCell className="text-center">
-                            <TooltipProvider>
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        <span>{getDecisionBadge(item.decision?.decision)}</span>
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                    <p>{item.decision?.reason_codes.join(', ')}</p>
-                                    </TooltipContent>
-                                </Tooltip>
-                            </TooltipProvider>
-                        </TableCell>
-                         <TableCell className="text-center">
-                            {item.decision?.decision === 'PAUSE' ? (
-                                <Button variant="secondary" size="sm" className="h-8"><PauseCircle className="mr-1.5 h-3 w-3"/>Pause</Button>
-                            ) : (
-                                <Button variant="outline" size="sm" className="h-8"><PlayCircle className="mr-1.5 h-3 w-3"/>Activate</Button>
-                            )}
-                         </TableCell>
                         </TableRow>
                     ))}
                     </TableBody>
@@ -337,5 +336,3 @@ export default function AdsControlCenterTab({
     </div>
   )
 }
-
-    
