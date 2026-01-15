@@ -9,28 +9,24 @@ import type {
   InventorySnapshot,
   ControlThresholds,
   DecisionEngineOutput,
-  AdAlert,
-  ActionLog
 } from '@/lib/types';
 import {
   controlThresholds as initialControlThresholds,
-  adAlerts,
-  actionLogs
 } from '@/lib/ads-data';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import KpiCard from '../kpi-card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { Flame, GitCommit, AlertOctagon, Bot, ChevronsRight, Edit, Save, X, RadioTower, Zap, CircleDollarSign, ArrowUp, ArrowDown, PauseCircle, PlayCircle, MinusCircle, Upload, Cloud, Download } from 'lucide-react';
+import { Flame, GitCommit, AlertOctagon, Bot, ChevronsRight, Edit, Save, X, RadioTower, Zap, Upload, Cloud, Download, ChevronRight, ChevronDown } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 
 interface AdsControlCenterTabProps {
@@ -43,21 +39,23 @@ interface AdsControlCenterTabProps {
     onCloudImport: () => void;
 }
 
-type PlatformDailySummary = {
-  date: string;
-  platform_id: string;
-  impressions: number;
-  clicks: number;
-  orders: number;
-  gmv: number;
-  ads_spent: number;
-  ctr: number;
-  cvr: number;
-  roas: number;
-  tacos: number;
-  acos: number;
+type PlatformMatrix = {
+  [platform: string]: {
+    [metric: string]: {
+      [date: string]: number;
+    }
+  }
 };
 
+const METRIC_CONFIG: {key: keyof AdsDailyMetrics, name: string, format: (val: number) => string | number}[] = [
+    { key: 'impressions', name: 'Impressions', format: (val) => val.toLocaleString() },
+    { key: 'clicks', name: 'Clicks', format: (val) => val.toLocaleString() },
+    { key: 'orders', name: 'Orders', format: (val) => val.toLocaleString() },
+    { key: 'gmv', name: 'GMV (₹)', format: (val) => val.toLocaleString() },
+    { key: 'ads_spent', name: 'Ad Spend (₹)', format: (val) => val.toLocaleString() },
+    { key: 'roas', name: 'ROAS', format: (val) => val.toFixed(2) },
+    { key: 'acos', name: 'ACOS', format: (val) => val.toFixed(2) },
+];
 
 export default function AdsControlCenterTab({
     campaigns,
@@ -71,46 +69,40 @@ export default function AdsControlCenterTab({
   const [controlThresholds, setControlThresholds] = useState<ControlThresholds[]>(initialControlThresholds);
   const [editingThresholdId, setEditingThresholdId] = useState<string | null>(null);
   const [editedThresholds, setEditedThresholds] = useState<Partial<ControlThresholds>>({});
+  const [openPlatforms, setOpenPlatforms] = useState<string[]>([]);
 
-  const platformDailySummary = useMemo(() => {
-    const summary: { [key: string]: PlatformDailySummary } = {};
+  const { matrixData, dates, platforms } = useMemo(() => {
+    const matrix: PlatformMatrix = {};
+    const dateSet = new Set<string>();
+    const platformSet = new Set<string>();
 
     adsDailyMetrics.forEach(metric => {
-      const key = `${metric.date}-${metric.platform_id}`;
-      if (!summary[key]) {
-        summary[key] = {
-          date: metric.date,
-          platform_id: metric.platform_id,
-          impressions: 0,
-          clicks: 0,
-          orders: 0,
-          gmv: 0,
-          ads_spent: 0,
-          ctr: 0,
-          cvr: 0,
-          roas: 0,
-          tacos: 0,
-          acos: 0,
-        };
+      const platform = metric.platform_id;
+      const date = metric.date;
+
+      dateSet.add(date);
+      platformSet.add(platform);
+
+      if (!matrix[platform]) {
+        matrix[platform] = {};
       }
-      summary[key].impressions += metric.impressions;
-      summary[key].clicks += metric.clicks;
-      summary[key].orders += metric.orders;
-      summary[key].gmv += metric.gmv;
-      summary[key].ads_spent += metric.ads_spent;
+
+      METRIC_CONFIG.forEach(config => {
+        const key = config.key;
+        if (!matrix[platform][key]) {
+          matrix[platform][key] = {};
+        }
+        matrix[platform][key][date] = (matrix[platform][key][date] || 0) + (metric[key] as number);
+      });
     });
 
-    return Object.values(summary).map(s => {
-      s.ctr = s.impressions > 0 ? s.clicks / s.impressions : 0;
-      s.cvr = s.clicks > 0 ? s.orders / s.clicks : 0;
-      s.roas = s.ads_spent > 0 ? s.gmv / s.ads_spent : 0;
-      // Assuming TACOS requires total GMV, which might not be available at this level
-      // For now, let's use the same logic as ROAS's denominator
-      s.tacos = s.gmv > 0 ? s.ads_spent / s.gmv : 0;
-      s.acos = s.gmv > 0 ? s.ads_spent / s.gmv : 0;
-      return s;
-    }).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
+    const sortedDates = Array.from(dateSet).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+    
+    return {
+        matrixData: matrix,
+        dates: sortedDates,
+        platforms: Array.from(platformSet)
+    };
   }, [adsDailyMetrics]);
 
 
@@ -144,6 +136,12 @@ export default function AdsControlCenterTab({
     if (!isNaN(numValue)) {
         setEditedThresholds(prev => ({ ...prev, [field]: numValue }));
     }
+  };
+
+  const togglePlatform = (platform: string) => {
+    setOpenPlatforms(prev => 
+      prev.includes(platform) ? prev.filter(p => p !== platform) : [...prev, platform]
+    );
   };
 
   return (
@@ -194,42 +192,67 @@ export default function AdsControlCenterTab({
         </div>
 
         <Card>
-            <CardHeader><CardTitle className="text-base flex items-center gap-2"><Zap className="w-5 h-5 text-primary"/>Platform-Level Ads Control</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-base flex items-center gap-2"><Zap className="w-5 h-5 text-primary"/>Platform-Level Daily Performance</CardTitle></CardHeader>
             <CardContent>
-                <div className="overflow-x-auto custom-scrollbar">
+                <div className="overflow-x-auto custom-scrollbar border rounded-lg">
                 <Table>
-                    <TableHeader>
+                    <TableHeader className="bg-muted/50">
                     <TableRow>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Platform</TableHead>
-                        <TableHead className="text-right">Impressions</TableHead>
-                        <TableHead className="text-right">Clicks</TableHead>
-                        <TableHead className="text-right">Orders</TableHead>
-                        <TableHead className="text-right">Ad Spend (₹)</TableHead>
-                        <TableHead className="text-right">GMV (₹)</TableHead>
-                        <TableHead className="text-right">ROAS</TableHead>
-                        <TableHead className="text-right">TACOS</TableHead>
-                        <TableHead className="text-right">ACOS</TableHead>
+                        <TableHead className="sticky left-0 bg-muted/50 z-20 w-[200px] min-w-[200px]">Platform</TableHead>
+                        {dates.map(date => (
+                            <TableHead key={date} className="text-right min-w-[100px]">
+                                {new Date(date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
+                            </TableHead>
+                        ))}
                     </TableRow>
                     </TableHeader>
-                    <TableBody>
-                    {platformDailySummary.map(item => (
-                        <TableRow key={`${item.date}-${item.platform_id}`}>
-                        <TableCell className="font-medium text-foreground">
-                           {new Date(item.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
-                        </TableCell>
-                        <TableCell className="font-medium capitalize">{item.platform_id}</TableCell>
-                        <TableCell className="text-right font-mono">{(item.impressions || 0).toLocaleString()}</TableCell>
-                        <TableCell className="text-right font-mono">{(item.clicks || 0).toLocaleString()}</TableCell>
-                        <TableCell className="text-right font-mono">{(item.orders || 0).toLocaleString()}</TableCell>
-                        <TableCell className="text-right font-mono">{(item.ads_spent || 0).toLocaleString()}</TableCell>
-                        <TableCell className="text-right font-mono">{(item.gmv || 0).toLocaleString()}</TableCell>
-                        <TableCell className={cn("text-right font-bold", (item.roas || 0) > 3 ? 'text-green-600' : (item.roas || 0) < 2 ? 'text-destructive' : '')}>{(item.roas || 0).toFixed(2)}</TableCell>
-                        <TableCell className="text-right font-mono">{(item.tacos || 0).toFixed(2)}</TableCell>
-                        <TableCell className="text-right font-mono">{(item.acos || 0).toFixed(2)}</TableCell>
-                        </TableRow>
-                    ))}
-                    </TableBody>
+                    
+                    {platforms.map(platform => {
+                        const isOpen = openPlatforms.includes(platform);
+                        return (
+                            <Collapsible asChild key={platform} open={isOpen} onOpenChange={() => togglePlatform(platform)}>
+                                <TableBody>
+                                    <TableRow className="bg-card hover:bg-muted/50 border-b font-bold cursor-pointer" onClick={() => togglePlatform(platform)}>
+                                        <TableCell className="sticky left-0 bg-card z-10 font-bold capitalize text-foreground flex items-center gap-2">
+                                           <CollapsibleTrigger asChild>
+                                                <Button variant="ghost" size="icon" className="h-6 w-6">
+                                                   {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                                                </Button>
+                                            </CollapsibleTrigger>
+                                            {platform}
+                                        </TableCell>
+                                        {dates.map(date => {
+                                             const gmv = matrixData[platform]?.gmv?.[date] || 0;
+                                             return (
+                                                <TableCell key={`${platform}-gmv-${date}`} className="text-right font-mono text-primary">
+                                                    {gmv > 0 ? `₹${Math.round(gmv / 1000)}k` : '-'}
+                                                </TableCell>
+                                             );
+                                        })}
+                                    </TableRow>
+
+                                    <CollapsibleContent asChild>
+                                        <>
+                                            {METRIC_CONFIG.map(metric => (
+                                                <TableRow key={`${platform}-${metric.key}`} className="text-xs">
+                                                    <TableCell className="sticky left-0 bg-card z-10 pl-12 text-muted-foreground">{metric.name}</TableCell>
+                                                    {dates.map(date => {
+                                                        const value = matrixData[platform]?.[metric.key]?.[date];
+                                                        const isGmv = metric.key === 'gmv';
+                                                        return (
+                                                            <TableCell key={`${platform}-${metric.key}-${date}`} className={cn("text-right font-mono", isGmv ? 'text-primary' : '')}>
+                                                                {value !== undefined && value !== null ? metric.format(value) : '-'}
+                                                            </TableCell>
+                                                        );
+                                                    })}
+                                                </TableRow>
+                                            ))}
+                                        </>
+                                    </CollapsibleContent>
+                                </TableBody>
+                             </Collapsible>
+                        );
+                    })}
                 </Table>
                 </div>
             </CardContent>
@@ -289,12 +312,12 @@ export default function AdsControlCenterTab({
                 </CardHeader>
                 <CardContent>
                     <ul className="space-y-3">
-                        {adAlerts.map(alert => (
-                            <li key={alert.alert_id} className="flex items-start gap-3 text-xs">
+                         {decisionEngineOutputs.filter(d => d.decision !== 'MAINTAIN').slice(0, 5).map(alert => (
+                            <li key={alert.ad_group_id} className="flex items-start gap-3 text-xs">
                                 <AlertOctagon className="w-4 h-4 mt-0.5 text-destructive flex-shrink-0"/>
                                 <div>
-                                    <p className="font-bold text-foreground">[{alert.sku_code}] {alert.message}</p>
-                                    <p className="text-muted-foreground capitalize">{alert.platform_id} • {new Date(alert.timestamp).toLocaleString()}</p>
+                                    <p className="font-bold text-foreground">[{alert.ad_group_id}] {alert.decision}</p>
+                                    <p className="text-muted-foreground capitalize">{alert.platform_id} • {alert.reason_codes.join(', ')}</p>
                                 </div>
                             </li>
                         ))}
@@ -310,22 +333,21 @@ export default function AdsControlCenterTab({
             <CardContent>
                 <div className="overflow-y-auto max-h-60 custom-scrollbar">
                     <ul className="space-y-4">
-                        {actionLogs.map(log => (
-                            <li key={log.action_id} className="flex items-center gap-4 text-xs">
+                        {decisionEngineOutputs.filter(d => d.decision !== 'MAINTAIN').map(log => (
+                            <li key={log.ad_group_id} className="flex items-center gap-4 text-xs">
                                 <div className="flex items-center justify-center h-8 w-8 rounded-full bg-primary/10 text-primary">
                                     <Bot className="h-4 w-4" />
                                 </div>
                                 <div className="flex-grow">
                                     <p className="font-medium text-foreground">
-                                        <span className="font-bold capitalize">{log.action.replace('_', ' ')}</span> on <span className="font-bold">{log.entity_id}</span>
+                                        <span className="font-bold capitalize">{log.decision}</span> on <span className="font-bold">{log.ad_group_id}</span>
                                     </p>
                                     <p className="text-muted-foreground flex items-center gap-2">
-                                        Value changed from <span className="font-mono bg-muted p-0.5 rounded">{log.old_value}</span> <ChevronsRight className="h-3 w-3"/> <span className="font-mono bg-muted p-0.5 rounded">{log.new_value}</span>
+                                        Budget change: <span className="font-mono bg-muted p-0.5 rounded">{log.recommended_action.change_pct}%</span> <ChevronsRight className="h-3 w-3"/> <span className="font-mono bg-muted p-0.5 rounded">₹{log.recommended_action.new_daily_budget.toLocaleString()}</span>
                                     </p>
                                 </div>
                                 <div className="text-right text-muted-foreground">
-                                    <p>{new Date(log.timestamp).toLocaleDateString()}</p>
-                                    <p>{new Date(log.timestamp).toLocaleTimeString()}</p>
+                                    <p>{new Date(log.date).toLocaleDateString()}</p>
                                 </div>
                             </li>
                         ))}
