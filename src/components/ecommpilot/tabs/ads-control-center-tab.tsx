@@ -1,8 +1,11 @@
 
 "use client";
 
-import React, { useState, useMemo } from 'react';
-import type {
+import React, { useState, useMemo, useEffect } from 'react';
+import { Line, ComposedChart, XAxis, YAxis, CartesianGrid, Legend, Tooltip as RechartsTooltip, Bar } from 'recharts';
+import { DateRange } from 'react-day-picker';
+import { subDays, format, startOfToday, endOfToday } from 'date-fns';
+import {
   Campaign,
   AdGroup,
   AdsDailyMetrics,
@@ -10,16 +13,13 @@ import type {
   ControlThresholds,
   DecisionEngineOutput,
 } from '@/lib/types';
-import {
-  controlThresholds as initialControlThresholds,
-} from '@/lib/ads-data';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import KpiCard from '../kpi-card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { Flame, GitCommit, AlertOctagon, Bot, ChevronsRight, Edit, Save, X, RadioTower, Zap, Upload, Cloud, Download, ChevronRight, ChevronDown } from 'lucide-react';
+import { Flame, GitCommit, AlertOctagon, Bot, ChevronsRight, Edit, Save, X, RadioTower, Zap, Upload, Cloud, Download, ChevronRight, ChevronDown, Calendar as CalendarIcon, GitCompareArrows, ArrowUp, ArrowDown } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
@@ -27,7 +27,11 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-
+import { ChartContainer, ChartTooltipContent } from '@/components/ui/chart';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 
 interface AdsControlCenterTabProps {
     campaigns: Campaign[];
@@ -48,14 +52,15 @@ type PlatformMatrix = {
 };
 
 const METRIC_CONFIG: {key: keyof AdsDailyMetrics, name: string, format: (val: number) => string | number}[] = [
+    { key: 'gmv', name: 'GMV (₹)', format: (val) => `₹${val.toLocaleString()}` },
+    { key: 'ads_spent', name: 'Ad Spend (₹)', format: (val) => `₹${val.toLocaleString()}` },
+    { key: 'roas', name: 'ROAS', format: (val) => val.toFixed(2) },
     { key: 'impressions', name: 'Impressions', format: (val) => val.toLocaleString() },
     { key: 'clicks', name: 'Clicks', format: (val) => val.toLocaleString() },
     { key: 'orders', name: 'Orders', format: (val) => val.toLocaleString() },
-    { key: 'gmv', name: 'GMV (₹)', format: (val) => val.toLocaleString() },
-    { key: 'ads_spent', name: 'Ad Spend (₹)', format: (val) => val.toLocaleString() },
-    { key: 'roas', name: 'ROAS', format: (val) => val.toFixed(2) },
-    { key: 'acos', name: 'ACOS', format: (val) => val.toFixed(2) },
+    { key: 'acos', name: 'ACOS', format: (val) => `${(val * 100).toFixed(1)}%` },
 ];
+
 
 export default function AdsControlCenterTab({
     campaigns,
@@ -66,55 +71,153 @@ export default function AdsControlCenterTab({
     onFileUpload,
     onCloudImport,
 }: AdsControlCenterTabProps) {
-  const [controlThresholds, setControlThresholds] = useState<ControlThresholds[]>(initialControlThresholds);
+  const [controlThresholds, setControlThresholds] = useState<ControlThresholds[]>([]);
   const [editingThresholdId, setEditingThresholdId] = useState<string | null>(null);
   const [editedThresholds, setEditedThresholds] = useState<Partial<ControlThresholds>>({});
   const [openPlatforms, setOpenPlatforms] = useState<string[]>([]);
+  
+  const [isComparing, setIsComparing] = useState(false);
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({ from: subDays(startOfToday(), 7), to: endOfToday() });
+  const [compareDateRange, setCompareDateRange] = useState<DateRange | undefined>({ from: subDays(startOfToday(), 14), to: subDays(endOfToday(), 7) });
 
-  const { matrixData, dates, platforms } = useMemo(() => {
+
+  const allPlatforms = useMemo(() => Array.from(new Set(adsDailyMetrics.map(m => m.platform_id))), [adsDailyMetrics]);
+
+  useEffect(() => {
+    setControlThresholds(prev => {
+        const existingPlatforms = new Set(prev.map(p => p.platform_id));
+        const newPlatforms = allPlatforms.filter(p => !existingPlatforms.has(p));
+        
+        const newThresholds = newPlatforms.map(platform => ({
+            id: `${platform}_default`,
+            platform_id: platform,
+            phase: 'Default',
+            min_roas: 2.0,
+            target_roas: 3.0,
+            max_tacos: 0.35,
+            min_stock_cover: 10,
+            pause_stock_cover: 5,
+            scale_budget_pct: 0.20,
+            cut_budget_pct: 0.20,
+        }));
+        
+        return [...prev, ...newThresholds];
+    });
+    setOpenPlatforms(allPlatforms);
+  }, [allPlatforms]);
+  
+
+  const processPeriodData = (data: AdsDailyMetrics[]) => {
+      if (!data) return { kpis: { totalSpend: 0, totalGmv: 0, blendedRoas: 0 }, chartData: [], platformPerformance: [] };
+
+      const kpis = data.reduce((acc, item) => {
+          acc.totalSpend += item.ads_spent || 0;
+          acc.totalGmv += item.gmv || 0;
+          return acc;
+      }, { totalSpend: 0, totalGmv: 0 });
+
+      const blendedRoas = kpis.totalGmv / kpis.totalSpend || 0;
+
+      const dailyDataMap: { [day: string]: any } = {};
+      data.forEach(metric => {
+          const day = format(new Date(metric.date), 'dd/MM');
+          if (!dailyDataMap[day]) {
+              dailyDataMap[day] = { day, gmv: 0, ads_spent: 0 };
+          }
+          dailyDataMap[day].gmv += metric.gmv;
+          dailyDataMap[day].ads_spent += metric.ads_spent;
+      });
+
+      const chartData = Object.values(dailyDataMap).map(d => ({
+          ...d,
+          roas: d.gmv / d.ads_spent || 0
+      }));
+
+      const platformMap: { [key: string]: { gmv: number, spend: number } } = {};
+      data.forEach(metric => {
+        if (!platformMap[metric.platform_id]) {
+          platformMap[metric.platform_id] = { gmv: 0, spend: 0 };
+        }
+        platformMap[metric.platform_id].gmv += metric.gmv;
+        platformMap[metric.platform_id].spend += metric.ads_spent;
+      });
+
+      const platformPerformance = Object.entries(platformMap).map(([name, data]) => ({
+        name,
+        gmv: data.gmv,
+        spend: data.spend,
+        roas: data.gmv / data.spend || 0,
+      }));
+
+      return { kpis: { ...kpis, blendedRoas }, chartData, platformPerformance };
+  };
+
+  const { currentPeriod, comparisonPeriod, matrixData, dates } = useMemo(() => {
+    const filterDataByRange = (range: DateRange | undefined) => {
+        if (!range?.from || !range.to) return [];
+        return adsDailyMetrics.filter(d => {
+            const date = new Date(d.date);
+            return date >= range.from! && date <= range.to!;
+        });
+    };
+
+    const currentData = filterDataByRange(dateRange);
+    const compareData = isComparing ? filterDataByRange(compareDateRange) : [];
+
     const matrix: PlatformMatrix = {};
     const dateSet = new Set<string>();
-    const platformSet = new Set<string>();
 
-    adsDailyMetrics.forEach(metric => {
-      const platform = metric.platform_id;
-      const date = metric.date;
-
-      dateSet.add(date);
-      platformSet.add(platform);
-
-      if (!matrix[platform]) {
-        matrix[platform] = {};
-      }
-
-      METRIC_CONFIG.forEach(config => {
-        const key = config.key;
-        if (!matrix[platform][key]) {
-          matrix[platform][key] = {};
-        }
-        matrix[platform][key][date] = (matrix[platform][key][date] || 0) + (metric[key] as number);
-      });
+    currentData.forEach(metric => {
+        const platform = metric.platform_id;
+        const date = format(new Date(metric.date), 'yyyy-MM-dd');
+        dateSet.add(date);
+        if (!matrix[platform]) matrix[platform] = {};
+        METRIC_CONFIG.forEach(config => {
+            const key = config.key;
+            if (!matrix[platform][key]) matrix[platform][key] = {};
+            matrix[platform][key][date] = (matrix[platform][key][date] || 0) + (metric[key] as number);
+        });
     });
 
     const sortedDates = Array.from(dateSet).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
-    
+
     return {
+        currentPeriod: processPeriodData(currentData),
+        comparisonPeriod: processPeriodData(compareData),
         matrixData: matrix,
-        dates: sortedDates,
-        platforms: Array.from(platformSet)
+        dates: sortedDates
     };
-  }, [adsDailyMetrics]);
+  }, [adsDailyMetrics, dateRange, compareDateRange, isComparing]);
 
+  const criticalAlerts = useMemo(() => {
+      if (!isComparing || comparisonPeriod.platformPerformance.length === 0) return [];
+      const alerts: {platform: string, message: string}[] = [];
 
-  const overallKpis = useMemo(() => {
-    return adsDailyMetrics.reduce((acc, item) => {
-        acc.totalSpend += item.ads_spent || 0;
-        acc.totalGmv += item.gmv || 0;
-        return acc;
-    }, { totalSpend: 0, totalGmv: 0 });
-  }, [adsDailyMetrics]);
-
-
+      currentPeriod.platformPerformance.forEach(current => {
+          const compare = comparisonPeriod.platformPerformance.find(c => c.name === current.name);
+          if (compare && compare.roas > 0) {
+              const roasChange = (current.roas - compare.roas) / compare.roas;
+              if (roasChange < -0.25) { // 25% drop
+                  alerts.push({
+                      platform: current.name,
+                      message: `ROAS dropped by ${Math.abs(roasChange * 100).toFixed(0)}% to ${current.roas.toFixed(2)}.`
+                  });
+              }
+          }
+           if (compare && compare.spend > 0) {
+              const spendChange = (current.spend - compare.spend) / compare.spend;
+              const gmvChange = compare.gmv > 0 ? (current.gmv - compare.gmv) / compare.gmv : spendChange;
+              if (spendChange > 0.5 && gmvChange < spendChange / 2) {
+                   alerts.push({
+                      platform: current.name,
+                      message: `Spend is up ${Math.abs(spendChange * 100).toFixed(0)}% but GMV growth is lagging.`
+                  });
+              }
+          }
+      });
+      return alerts;
+  }, [currentPeriod, comparisonPeriod, isComparing]);
+  
   const handleEdit = (threshold: ControlThresholds) => {
     setEditingThresholdId(threshold.id);
     setEditedThresholds(threshold);
@@ -144,10 +247,39 @@ export default function AdsControlCenterTab({
     );
   };
 
+  const renderKpiCard = (title: string, current: number, compare: number, formatFn: (val: number) => string, higherIsBetter = true) => {
+      const diff = isComparing && compare > 0 ? ((current - compare) / compare) * 100 : 0;
+      const diffColor = higherIsBetter ? (diff >= 0 ? 'text-green-600' : 'text-destructive') : (diff < 0 ? 'text-green-600' : 'text-destructive');
+      return (
+          <Card>
+              <CardHeader className="p-4 pb-0 flex flex-row items-center justify-between">
+                  <CardTitle className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{title}</CardTitle>
+                   {isComparing && diff !== 0 && (
+                      <span className={cn("text-xs font-bold flex items-center gap-1", diffColor)}>
+                          {diff > 0 ? <ArrowUp className="w-3 h-3"/> : <ArrowDown className="w-3 h-3"/>}
+                          {Math.abs(diff).toFixed(1)}%
+                      </span>
+                  )}
+              </CardHeader>
+              <CardContent className="p-4 pt-1">
+                  <h2 className="text-xl font-bold text-foreground mt-1">{formatFn(current)}</h2>
+                  {isComparing && <p className="text-xs text-muted-foreground mt-1">vs {formatFn(compare)}</p>}
+              </CardContent>
+          </Card>
+      );
+  };
+
+  const chartConfig = {
+      gmv: { label: "GMV", color: "hsl(var(--chart-1))" },
+      ads_spent: { label: "Ad Spend", color: "hsl(var(--chart-2))" },
+      roas: { label: "ROAS", color: "hsl(var(--chart-3))" },
+      compare_gmv: { label: "Comp GMV", color: "hsl(var(--foreground))" },
+  };
+
   return (
     <div className="space-y-6">
         <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
+            <CardHeader className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                 <div>
                     <CardTitle className="flex items-center gap-2">
                         <RadioTower className="w-6 h-6 text-primary" />
@@ -155,30 +287,37 @@ export default function AdsControlCenterTab({
                     </CardTitle>
                     <CardDescription>Real-time, rules-based ad decisions across all platforms.</CardDescription>
                 </div>
+                 <div className="flex items-center gap-2 flex-wrap justify-end w-full md:w-auto">
+                    <div className="flex items-center gap-2">
+                        <Switch id="compare-mode" checked={isComparing} onCheckedChange={setIsComparing} />
+                        <Label htmlFor="compare-mode" className="flex items-center gap-1.5"><GitCompareArrows className="w-4 h-4" /> Compare</Label>
+                    </div>
+                     <Popover>
+                        <PopoverTrigger asChild>
+                             <Button id="date" variant={"outline"} className={cn("w-[260px] justify-start text-left font-normal h-9", !dateRange && "text-muted-foreground")}>
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {dateRange?.from ? (dateRange.to ? `${format(dateRange.from, "LLL dd, y")} - ${format(dateRange.to, "LLL dd, y")}`: format(dateRange.from, "LLL dd, y")) : (<span>Pick a date</span>)}
+                            </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="end"><Calendar initialFocus mode="range" defaultMonth={dateRange?.from} selected={dateRange} onSelect={setDateRange} numberOfMonths={2}/></PopoverContent>
+                    </Popover>
+                    {isComparing && (
+                         <Popover>
+                            <PopoverTrigger asChild>
+                                 <Button id="compare-date" variant={"outline"} className={cn("w-[260px] justify-start text-left font-normal h-9", !compareDateRange && "text-muted-foreground")}>
+                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                    {compareDateRange?.from ? (compareDateRange.to ? `${format(compareDateRange.from, "LLL dd, y")} - ${format(compareDateRange.to, "LLL dd, y")}`: format(compareDateRange.from, "LLL dd, y")) : (<span>Pick a period</span>)}
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="end"><Calendar initialFocus mode="range" defaultMonth={compareDateRange?.from} selected={compareDateRange} onSelect={setCompareDateRange} numberOfMonths={2}/></PopoverContent>
+                        </Popover>
+                    )}
+                </div>
                 <div className="flex items-center gap-2">
                     <TooltipProvider>
-                         <Tooltip>
-                            <TooltipTrigger asChild>
-                                <Button variant="outline" size="icon" className="h-9 w-9" asChild>
-                                    <a href="/ads-template.csv" download>
-                                        <Download className="h-4 w-4" />
-                                    </a>
-                                </Button>
-                            </TooltipTrigger>
-                            <TooltipContent><p>Download Template</p></TooltipContent>
-                        </Tooltip>
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => document.getElementById('ads-upload')?.click()}><Upload className="h-4 w-4" /></Button>
-                            </TooltipTrigger>
-                            <TooltipContent><p>Import from .xlsx</p></TooltipContent>
-                        </Tooltip>
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <Button variant="outline" size="icon" className="h-9 w-9" onClick={onCloudImport}><Cloud className="h-4 w-4" /></Button>
-                            </TooltipTrigger>
-                            <TooltipContent><p>Import from Google Sheet</p></TooltipContent>
-                        </Tooltip>
+                         <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-9 w-9" asChild><a href="/ads-template.csv" download><Download className="h-4 w-4" /></a></Button></TooltipTrigger><TooltipContent><p>Download Template</p></TooltipContent></Tooltip>
+                        <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-9 w-9" onClick={() => document.getElementById('ads-upload')?.click()}><Upload className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Import from .xlsx</p></TooltipContent></Tooltip>
+                        <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-9 w-9" onClick={onCloudImport}><Cloud className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Import from Google Sheet</p></TooltipContent></Tooltip>
                     </TooltipProvider>
                     <input type="file" id="ads-upload" className="hidden" accept=".xlsx, .xls, .csv" onChange={onFileUpload}/>
                 </div>
@@ -186,10 +325,29 @@ export default function AdsControlCenterTab({
         </Card>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <KpiCard title="Total Ad Spend" value={`₹${overallKpis.totalSpend.toLocaleString()}`} />
-            <KpiCard title="Total GMV" value={`₹${overallKpis.totalGmv.toLocaleString()}`} />
-            <KpiCard title="Blended ROAS" value={(overallKpis.totalGmv / overallKpis.totalSpend || 0).toFixed(2)} className="text-primary" />
+            {renderKpiCard("Total Ad Spend", currentPeriod.kpis.totalSpend, comparisonPeriod.kpis.totalSpend, (val) => `₹${val.toLocaleString(undefined, {maximumFractionDigits:0})}`, false)}
+            {renderKpiCard("Total GMV", currentPeriod.kpis.totalGmv, comparisonPeriod.kpis.totalGmv, (val) => `₹${val.toLocaleString(undefined, {maximumFractionDigits:0})}`)}
+            {renderKpiCard("Blended ROAS", currentPeriod.kpis.blendedRoas, comparisonPeriod.kpis.blendedRoas, (val) => val.toFixed(2), true)}
         </div>
+        
+        <Card>
+            <CardHeader><CardTitle className="text-base">Performance Over Time</CardTitle></CardHeader>
+            <CardContent>
+                 <ChartContainer config={chartConfig} className="h-[250px] w-full">
+                    <ComposedChart data={currentPeriod.chartData}>
+                        <CartesianGrid vertical={false} />
+                        <XAxis dataKey="day" tickLine={false} axisLine={false} tickMargin={8} fontSize={12} />
+                        <YAxis yAxisId="left" stroke="hsl(var(--chart-1))" tickFormatter={(value) => `₹${(value as number / 1000)}k`} />
+                        <YAxis yAxisId="right" orientation="right" stroke="hsl(var(--chart-3))" tickFormatter={(value) => value.toFixed(1)} />
+                        <RechartsTooltip content={<ChartTooltipContent />} />
+                        <Legend />
+                        <Bar dataKey="gmv" name="GMV" yAxisId="left" fill="var(--color-gmv)" radius={[4,4,0,0]} />
+                        <Line type="monotone" dataKey="roas" name="ROAS" yAxisId="right" stroke="var(--color-roas)" strokeWidth={2} dot={false}/>
+                        {isComparing && <Line type="monotone" dataKey="compare_gmv" name="Comp GMV" yAxisId="left" stroke="var(--color-compare_gmv)" strokeWidth={2} dot={false} strokeDasharray="3 3"/>}
+                    </ComposedChart>
+                </ChartContainer>
+            </CardContent>
+        </Card>
 
         <Card>
             <CardHeader><CardTitle className="text-base flex items-center gap-2"><Zap className="w-5 h-5 text-primary"/>Platform-Level Daily Performance</CardTitle></CardHeader>
@@ -200,14 +358,14 @@ export default function AdsControlCenterTab({
                     <TableRow>
                         <TableHead className="sticky left-0 bg-muted/50 z-20 w-[200px] min-w-[200px]">Platform</TableHead>
                         {dates.map(date => (
-                            <TableHead key={date} className="text-right min-w-[100px]">
+                            <TableHead key={date} className="text-right min-w-[100px] font-normal">
                                 {new Date(date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
                             </TableHead>
                         ))}
                     </TableRow>
                     </TableHeader>
                     
-                    {platforms.map(platform => {
+                    {allPlatforms.map(platform => {
                         const isOpen = openPlatforms.includes(platform);
                         return (
                             <Collapsible asChild key={platform} open={isOpen} onOpenChange={() => togglePlatform(platform)}>
@@ -238,9 +396,8 @@ export default function AdsControlCenterTab({
                                                     <TableCell className="sticky left-0 bg-card z-10 pl-12 text-muted-foreground">{metric.name}</TableCell>
                                                     {dates.map(date => {
                                                         const value = matrixData[platform]?.[metric.key]?.[date];
-                                                        const isGmv = metric.key === 'gmv';
                                                         return (
-                                                            <TableCell key={`${platform}-${metric.key}-${date}`} className={cn("text-right font-mono", isGmv ? 'text-primary' : '')}>
+                                                            <TableCell key={`${platform}-${metric.key}-${date}`} className={cn("text-right font-mono", metric.key === 'gmv' ? 'text-primary' : '')}>
                                                                 {value !== undefined && value !== null ? metric.format(value) : '-'}
                                                             </TableCell>
                                                         );
@@ -265,11 +422,10 @@ export default function AdsControlCenterTab({
                     <Table>
                         <TableHeader>
                             <TableRow>
-                                <TableHead>Rule Set</TableHead>
+                                <TableHead>Platform</TableHead>
                                 <TableHead className="text-right">Min ROAS</TableHead>
                                 <TableHead className="text-right">Target ROAS</TableHead>
                                 <TableHead className="text-right">Max TACOS</TableHead>
-                                <TableHead className="text-right">Pause Stock (d)</TableHead>
                                 <TableHead className="text-center">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -278,11 +434,10 @@ export default function AdsControlCenterTab({
                                 <TableRow key={t.id}>
                                     {editingThresholdId === t.id ? (
                                         <>
-                                            <TableCell className="font-medium capitalize">{t.platform_id} {t.phase}</TableCell>
+                                            <TableCell className="font-medium capitalize">{t.platform_id}</TableCell>
                                             <TableCell><Input className="h-8 w-20 ml-auto" value={editedThresholds.min_roas} onChange={e => handleThresholdChange('min_roas', e.target.value)}/></TableCell>
                                             <TableCell><Input className="h-8 w-20 ml-auto" value={editedThresholds.target_roas} onChange={e => handleThresholdChange('target_roas', e.target.value)}/></TableCell>
                                             <TableCell><Input className="h-8 w-20 ml-auto" value={editedThresholds.max_tacos} onChange={e => handleThresholdChange('max_tacos', e.target.value)}/></TableCell>
-                                            <TableCell><Input className="h-8 w-20 ml-auto" value={editedThresholds.pause_stock_cover} onChange={e => handleThresholdChange('pause_stock_cover', e.target.value)}/></TableCell>
                                             <TableCell className="flex gap-1 justify-center">
                                                 <Button size="icon" className="h-8 w-8" onClick={() => handleSave(t.id)}><Save className="h-4 w-4"/></Button>
                                                 <Button size="icon" variant="ghost" className="h-8 w-8" onClick={handleCancel}><X className="h-4 w-4"/></Button>
@@ -290,11 +445,10 @@ export default function AdsControlCenterTab({
                                         </>
                                     ) : (
                                         <>
-                                            <TableCell className="font-medium capitalize">{t.platform_id} {t.phase}</TableCell>
+                                            <TableCell className="font-medium capitalize">{t.platform_id}</TableCell>
                                             <TableCell className="text-right font-mono">{t.min_roas.toFixed(2)}</TableCell>
                                             <TableCell className="text-right font-mono">{t.target_roas.toFixed(2)}</TableCell>
-                                            <TableCell className="text-right font-mono">{t.max_tacos.toFixed(2)}</TableCell>
-                                            <TableCell className="text-right font-mono">{t.pause_stock_cover}d</TableCell>
+                                            <TableCell className="text-right font-mono">{(t.max_tacos*100).toFixed(1)}%</TableCell>
                                             <TableCell className="text-center">
                                                 <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleEdit(t)}><Edit className="h-4 w-4"/></Button>
                                             </TableCell>
@@ -311,50 +465,29 @@ export default function AdsControlCenterTab({
                     <CardTitle className="text-base flex items-center gap-2"><AlertOctagon className="w-5 h-5 text-destructive"/>Critical Alerts</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <ul className="space-y-3">
-                         {decisionEngineOutputs.filter(d => d.decision !== 'MAINTAIN').slice(0, 5).map(alert => (
-                            <li key={alert.ad_group_id} className="flex items-start gap-3 text-xs">
-                                <AlertOctagon className="w-4 h-4 mt-0.5 text-destructive flex-shrink-0"/>
-                                <div>
-                                    <p className="font-bold text-foreground">[{alert.ad_group_id}] {alert.decision}</p>
-                                    <p className="text-muted-foreground capitalize">{alert.platform_id} • {alert.reason_codes.join(', ')}</p>
-                                </div>
-                            </li>
-                        ))}
-                    </ul>
+                    {criticalAlerts.length > 0 ? (
+                        <ul className="space-y-3">
+                            {criticalAlerts.map((alert, i) => (
+                                <li key={i} className="flex items-start gap-3 text-xs">
+                                    <AlertOctagon className="w-4 h-4 mt-0.5 text-destructive flex-shrink-0"/>
+                                    <div>
+                                        <p className="font-bold text-foreground capitalize">{alert.platform}</p>
+                                        <p className="text-muted-foreground">{alert.message}</p>
+                                    </div>
+                                </li>
+                            ))}
+                        </ul>
+                    ) : (
+                        <div className="text-center text-muted-foreground py-8">
+                            <p>No critical alerts for the selected period.</p>
+                            <p className="text-xs">Enable compare mode to see performance-based alerts.</p>
+                        </div>
+                    )}
                 </CardContent>
             </Card>
         </div>
-         <Card>
-            <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2"><GitCommit className="w-5 h-5 text-muted-foreground"/>Action Logs</CardTitle>
-                <CardDescription>Audit trail for all automated and manual ad changes.</CardDescription>
-            </CardHeader>
-            <CardContent>
-                <div className="overflow-y-auto max-h-60 custom-scrollbar">
-                    <ul className="space-y-4">
-                        {decisionEngineOutputs.filter(d => d.decision !== 'MAINTAIN').map(log => (
-                            <li key={log.ad_group_id} className="flex items-center gap-4 text-xs">
-                                <div className="flex items-center justify-center h-8 w-8 rounded-full bg-primary/10 text-primary">
-                                    <Bot className="h-4 w-4" />
-                                </div>
-                                <div className="flex-grow">
-                                    <p className="font-medium text-foreground">
-                                        <span className="font-bold capitalize">{log.decision}</span> on <span className="font-bold">{log.ad_group_id}</span>
-                                    </p>
-                                    <p className="text-muted-foreground flex items-center gap-2">
-                                        Budget change: <span className="font-mono bg-muted p-0.5 rounded">{log.recommended_action.change_pct}%</span> <ChevronsRight className="h-3 w-3"/> <span className="font-mono bg-muted p-0.5 rounded">₹{log.recommended_action.new_daily_budget.toLocaleString()}</span>
-                                    </p>
-                                </div>
-                                <div className="text-right text-muted-foreground">
-                                    <p>{new Date(log.date).toLocaleDateString()}</p>
-                                </div>
-                            </li>
-                        ))}
-                    </ul>
-                </div>
-            </CardContent>
-        </Card>
     </div>
   )
 }
+
+    
