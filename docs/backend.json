@@ -70,7 +70,6 @@
   },
   "auth": {
     "providers": [
-      "google.com",
       "email"
     ]
   },
