@@ -1,15 +1,36 @@
 import { cn } from "@/lib/utils";
-import { Package } from "lucide-react";
+import Image from "next/image";
+import { PlaceHolderImages } from "@/lib/placeholder-images";
 
 export function Logo({ className }: { className?: string }) {
+  const logoImage = PlaceHolderImages.find((img) => img.id === "app-logo");
+
+  if (!logoImage) {
+    // Fallback to a simple div if the image isn't found
+    return (
+      <div
+        className={cn(
+          "flex items-center justify-center bg-muted rounded-lg",
+          className
+        )}
+      />
+    );
+  }
+
   return (
     <div
       className={cn(
-        "flex items-center justify-center bg-primary rounded-lg text-primary-foreground",
+        "relative overflow-hidden rounded-lg",
         className
       )}
     >
-      <Package className="w-[60%] h-[60%]" />
+      <Image
+        src={logoImage.imageUrl}
+        alt={logoImage.description}
+        data-ai-hint={logoImage.imageHint}
+        fill
+        className="object-cover"
+      />
     </div>
   );
 }
