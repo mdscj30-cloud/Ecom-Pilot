@@ -3,7 +3,6 @@
 import { Button } from "@/components/ui/button";
 import {
   CloudLightning,
-  LayoutDashboard,
   LogOut,
   RefreshCw,
   RotateCcw,
@@ -20,6 +19,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Logo } from "./logo";
 
 interface HeaderProps {
   onReset: () => void;
@@ -36,17 +36,16 @@ export default function Header({ onReset, onSyncAll }: HeaderProps) {
 
   return (
     <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground flex items-center gap-3">
-          <span className="flex items-center justify-center bg-primary/10 text-primary rounded-lg p-2">
-            <LayoutDashboard className="w-6 h-6" />
-          </span>
-          Unified Command Center
-        </h1>
-        <p className="text-muted-foreground text-xs mt-1 font-medium ml-14">
-          Multi-Channel Operations • Location-Wise Inventory • Advanced Growth
-          Analytics
-        </p>
+      <div className="flex items-center gap-4">
+        <Logo className="h-10 w-10" />
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">
+            EcommPilot
+          </h1>
+          <p className="text-muted-foreground text-xs mt-1 font-medium">
+            Unified E-Commerce Command Center
+          </p>
+        </div>
       </div>
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2 text-xs bg-card p-2 rounded-lg border shadow-sm">

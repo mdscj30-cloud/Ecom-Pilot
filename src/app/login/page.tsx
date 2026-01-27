@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
+import { Logo } from '@/components/ecommpilot/logo';
 
 export default function LoginPage() {
   const { user, isUserLoading } = useUser();
@@ -55,11 +56,14 @@ export default function LoginPage() {
   return (
     <div className="flex items-center justify-center min-h-screen bg-background">
       <div className="w-full max-w-sm p-8 space-y-6 bg-card border rounded-lg shadow-lg">
-        <div className="text-center space-y-2">
-          <h1 className="text-3xl font-bold text-foreground">EcommPilot</h1>
-          <p className="text-muted-foreground">
-            Sign in to your account
-          </p>
+        <div className="flex flex-col items-center text-center space-y-4">
+          <Logo className="w-14 h-14" />
+          <div className="space-y-1">
+            <h1 className="text-3xl font-bold text-foreground">EcommPilot</h1>
+            <p className="text-muted-foreground">
+              Sign in to your account
+            </p>
+          </div>
         </div>
         
         <form onSubmit={handleEmailPasswordSubmit} className="space-y-4">
