@@ -1,0 +1,155 @@
+/**
+ * @title Firestore Security Rules for EcommPilot Authentication
+ * @version 1.0
+ *
+ * @description
+ * This ruleset establishes a secure, user-centric data model for the EcommPilot
+ * application. It is designed for rapid prototyping, focusing on strict authorization
+ * while maintaining flexibility in data schemas.
+ *
+ * @philosophy Core Philosophy
+ * The security model is based on strict user ownership. All user-related data,
+ * including profile information and session history, is isolated within a
+ * user-specific data tree. A user can only access and manage their own data.
+ * This prevents data leakage and unauthorized access between users.
+ *
+ * @structure Data Structure
+ * Data is organized hierarchically to reflect ownership:
+ * - /users/{userId}: Stores the primary user profile document.
+ * - /users/{userId}/sessions/{sessionId}: A subcollection containing session
+ *   history for that specific user.
+ * This structure leverages Firestore's path-based security to create simple,
+ * efficient, and highly secure rules.
+ *
+ * @decisions Key Security Decisions
+ * 1.  **No User Enumeration**: Listing the top-level `/users` collection is
+ *     explicitly forbidden to protect user privacy and prevent scraping.
+ * 2.  **Strict Ownership**: All access is gated by checking if the authenticated
+ *     user's UID matches the {userId} in the document path.
+ * 3.  **Path-Data Consistency**: On creation, rules enforce that internal ID
+ *     fields (e.g., `user.id`, `session.userId`) match the corresponding IDs in
+ *     the document path, ensuring relational integrity.
+ * 4.  **Immutability of Ownership**: Key relational fields like `userId` are made
+ *     immutable after creation to prevent documents from being "re-assigned"
+ *     to different owners.
+ *
+ * @denormalization Denormalization for Authorization
+ * This model does not require denormalization for its authorization logic.
+ * Ownership is determined directly and efficiently from the document path
+ * (e.g., `/users/{userId}`), which avoids the need for extra document reads (`get()` calls)
+ * to verify permissions.
+ *
+ * @segregation Structural Segregation
+ * This pattern is not currently needed as the data model consists solely of
+ * private user data. There are no mixed public/private collections.
+ */
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ----------------------------------------------------------------------
+    // Helper Functions
+    // ----------------------------------------------------------------------
+
+    /**
+     * Checks if the user is authenticated.
+     */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /**
+     * Checks if the currently authenticated user's UID matches the provided userId.
+     * This is the primary function for enforcing data ownership.
+     */
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    /**
+     * A robust check for state-changing operations (update, delete).
+     * Verifies ownership AND ensures the document already exists.
+     */
+    function isExistingOwner(userId) {
+      return isOwner(userId) && resource != null;
+    }
+
+    /**
+     * Validates a new User document on creation.
+     * Ensures the internal `id` field matches the document's path {userId}.
+     * This establishes an unbreakable link between the path and the data.
+     */
+    function isValidUserCreate(userId) {
+      let data = request.resource.data;
+      return data.id == userId;
+    }
+
+    /**
+     * Validates a User document on update.
+     * Enforces that the internal `id` field cannot be changed, preserving ownership.
+     */
+    function isImmutableUserId() {
+      return request.resource.data.id == resource.data.id;
+    }
+
+    /**
+     * Validates a new Session document on creation.
+     * Ensures the internal `userId` field matches the {userId} from the path.
+     */
+    function isValidSessionCreate(userId) {
+      let data = request.resource.data;
+      return data.userId == userId;
+    }
+
+    /**
+     * Validates a Session document on update.
+     * Enforces that the `userId` field is immutable, preventing a session
+     * from being moved between users.
+     */
+    function isImmutableSessionUserId() {
+      return request.resource.data.userId == resource.data.userId;
+    }
+
+
+    // ----------------------------------------------------------------------
+    // Collection Rules
+    // ----------------------------------------------------------------------
+
+    /**
+     * @description Manages user profile documents.
+     * A user can create, read, update, and delete their own profile.
+     * Listing all users is explicitly denied to protect user privacy.
+     * @path /users/{userId}
+     * @allow (get) An authenticated user with UID 'user123' can read '/users/user123'.
+     * @allow (create) An authenticated user with UID 'user123' can create '/users/user123' if the document data includes `id: 'user123'`.
+     * @deny (list) Any user, authenticated or not, is blocked from listing the '/users' collection.
+     * @deny (get) A user with UID 'user456' is blocked from reading '/users/user123'.
+     * @principle Restricts access to a user's own data tree and prevents user enumeration.
+     */
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow list: if false;
+      allow create: if isOwner(userId) && isValidUserCreate(userId);
+      allow update: if isExistingOwner(userId) && isImmutableUserId();
+      allow delete: if isExistingOwner(userId);
+    }
+
+    /**
+     * @description Manages session documents nested under a user.
+     * A user can manage their own session history but cannot see others'.
+     * @path /users/{userId}/sessions/{sessionId}
+     * @allow (list) An authenticated user with UID 'user123' can list documents in '/users/user123/sessions'.
+     * @allow (create) User 'user123' can create a new session document in their own subcollection.
+     * @deny (get) A user with UID 'user456' is blocked from reading any document in '/users/user123/sessions'.
+     * @deny (update) A user with UID 'user123' cannot update a session if its internal `userId` field is being changed.
+     * @principle Enforces document ownership for a subcollection based on the parent path.
+     */
+    match /users/{userId}/sessions/{sessionId} {
+      allow get: if isOwner(userId);
+      allow list: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidSessionCreate(userId);
+      allow update: if isExistingOwner(userId) && isImmutableSessionUserId();
+      allow delete: if isExistingOwner(userId);
+    }
+  }
+}

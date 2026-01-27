@@ -1,0 +1,118 @@
+{
+  "entities": {
+    "User": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "User",
+      "type": "object",
+      "description": "Represents a user of the EcommPilot application.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the user entity."
+        },
+        "email": {
+          "type": "string",
+          "description": "Email address of the user.",
+          "format": "email"
+        },
+        "firstName": {
+          "type": "string",
+          "description": "First name of the user."
+        },
+        "lastName": {
+          "type": "string",
+          "description": "Last name of the user."
+        }
+      },
+      "required": [
+        "id",
+        "email",
+        "firstName",
+        "lastName"
+      ]
+    },
+    "Session": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Session",
+      "type": "object",
+      "description": "Represents a user session.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the session entity."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to User. (Relationship: User 1:N Session)"
+        },
+        "loginTime": {
+          "type": "string",
+          "description": "Timestamp of when the user logged in.",
+          "format": "date-time"
+        },
+        "logoutTime": {
+          "type": "string",
+          "description": "Timestamp of when the user logged out.  Will be null if the user is still logged in.",
+          "format": "date-time"
+        },
+        "ipAddress": {
+          "type": "string",
+          "description": "IP address of the user's device during the session."
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "loginTime",
+        "ipAddress"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/users/{userId}",
+        "definition": {
+          "entityName": "User",
+          "schema": {
+            "$ref": "#/backend/entities/User"
+          },
+          "description": "Stores user profiles. Access is restricted to the user themselves, based on their userId. No denormalization needed.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier for the user."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/sessions/{sessionId}",
+        "definition": {
+          "entityName": "Session",
+          "schema": {
+            "$ref": "#/backend/entities/Session"
+          },
+          "description": "Stores user session data. Access is restricted to the user themselves, based on their userId. No denormalization needed.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier for the user."
+            },
+            {
+              "name": "sessionId",
+              "description": "The unique identifier for the session."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The Firestore structure is designed to ensure Authorization Independence, Role-Based Access Control (DBAC), and Queryability. User data and session data are stored in path-based collections under `/users/{userId}` to leverage Firestore's security rules for user-specific access. The ownership is implicit in the path, enhancing security and simplifying rules. The `sessions` subcollection enforces a clear `User 1:N Session` relationship, where each session document is directly tied to a specific user. This design avoids hierarchical authorization dependencies and makes security rules more straightforward. Denormalization is not explicitly needed in this simple authentication setup, as the primary access control is based on the user's own data, not collaborative data."
+  }
+}
