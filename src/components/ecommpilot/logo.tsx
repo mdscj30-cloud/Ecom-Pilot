@@ -29,7 +29,7 @@ export function Logo({ className }: { className?: string }) {
         alt={logoImage.description}
         data-ai-hint={logoImage.imageHint}
         fill
-        className="object-cover"
+        className="object-contain"
       />
     </div>
   );
