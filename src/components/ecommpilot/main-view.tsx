@@ -52,6 +52,13 @@ import PnlTab from "./tabs/pnl-tab";
 import RecommendationsTab from "./tabs/recommendations-tab";
 import GrowthTab from "./tabs/growth-tab";
 import AdsControlCenterTab from "./tabs/ads-control-center-tab";
+import ChannelGroupsTab from "./tabs/channel-groups-tab";
+import UnicommerceUploadTab from "./tabs/unicommerce-upload-tab";
+import DailyReportTab from "./tabs/daily-report-tab";
+import CancellationTab from "./tabs/cancellation-tab";
+import PlatformComparisonTab from "./tabs/platform-comparison-tab";
+import EnhancedDailyReportTab from "./tabs/enhanced-daily-report-tab";
+import type { OrderRow } from "./tabs/cancellation-tab";
 import { AddSkuModal } from "./modals";
 
 const channelIcons = {
@@ -62,6 +69,11 @@ const channelIcons = {
   growth: TrendingUp,
   recommendations: CheckCircle,
   ads: RadioTower,
+  channelgroups: TrendingUp,
+  ucupload: Box,
+  dailyreport: Activity,
+  cancellation: AlertTriangle,
+  platformcomp: RadioTower,
 };
 
 // --- IMPORTANT: Paste your Google Sheet URLs here ---
@@ -102,6 +114,11 @@ export default function MainView() {
 
   // Modals
   const [isAddSkuModalOpen, setAddSkuModalOpen] = useState(false);
+
+  // Order rows for new tabs (parsed from uploaded CSVs)
+  const [orderRows, setOrderRows] = useState<OrderRow[]>([]);
+  const [oosDays, setOosDays] = useState(14);
+  const [availableChannels, setAvailableChannels] = useState<string[]>([]);
 
   const [isClient, setIsClient] = useState(false);
   useEffect(() => {
@@ -613,7 +630,7 @@ export default function MainView() {
             return (
               <TabsTrigger key={tab} value={tab} className="capitalize text-xs sm:text-sm">
                 <Icon className="w-4 h-4 mr-1.5" />
-                {tab === 'daily' ? 'Daily Ops' : tab === 'dailypnl' ? 'Daily P&L' : tab === 'recommendations' ? 'Action Center' : tab === 'b2b' ? 'B2B Inventory' : tab === 'ads' ? 'Ads Control' : tab}
+                {tab === 'daily' ? 'Daily Ops' : tab === 'dailypnl' ? 'Daily P&L' : tab === 'recommendations' ? 'Action Center' : tab === 'b2b' ? 'B2B Inventory' : tab === 'ads' ? 'Ads Control' : tab === 'channelgroups' ? 'Channel Groups' : tab === 'ucupload' ? 'UC Upload' : tab === 'dailyreport' ? 'Daily Report' : tab === 'cancellation' ? 'Cancellations' : tab === 'platformcomp' ? 'Platform Comparison' : tab}
               </TabsTrigger>
             )
           })}
@@ -688,6 +705,40 @@ export default function MainView() {
                 onFileUpload={(e) => handleFileUpload(e, 'ads')}
                 onCloudImport={() => handleCloudSync('ads')}
             />
+        </TabsContent>
+        <TabsContent value="channelgroups">
+          <ChannelGroupsTab
+            inventoryData={displayData}
+            dailyData={dailyData}
+          />
+        </TabsContent>
+        <TabsContent value="ucupload">
+          <UnicommerceUploadTab
+            onOrdersParsed={(rows, channels) => {
+              setOrderRows(rows as any);
+              setAvailableChannels(channels);
+            }}
+          />
+        </TabsContent>
+        <TabsContent value="dailyreport">
+          <EnhancedDailyReportTab
+            inventoryData={displayData}
+            orders={orderRows}
+            oosDays={oosDays}
+            onOosDaysChange={setOosDays}
+          />
+        </TabsContent>
+        <TabsContent value="cancellation">
+          <CancellationTab
+            orders={orderRows}
+            availableChannels={availableChannels}
+          />
+        </TabsContent>
+        <TabsContent value="platformcomp">
+          <PlatformComparisonTab
+            orders={orderRows}
+            availableChannels={availableChannels}
+          />
         </TabsContent>
       </Tabs>
 
