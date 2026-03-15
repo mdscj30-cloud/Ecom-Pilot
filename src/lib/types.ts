@@ -102,7 +102,7 @@ export interface MatrixData {
   };
 }
 
-export type TabId = 'daily' | 'inventory' | 'b2b' | 'dailypnl' | 'recommendations' | 'growth' | 'ads';
+export type TabId = 'daily' | 'inventory' | 'b2b' | 'dailypnl' | 'recommendations' | 'growth' | 'ads' | 'channelgroups' | 'ucupload' | 'dailyreport' | 'cancellation' | 'platformcomp';
 
 export type InventorySortColumn = 
   | 'name'
